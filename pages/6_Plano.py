@@ -23,7 +23,7 @@ with tab_plano:
     plano = ASSETS / "plano_panol.png"
     if plano.exists():
         st.image(str(plano), use_container_width=True,
-                 caption="Plano de ubicación de stock — Htal. Sor María Ludovica")
+                 caption="Plano de ubicación de stock del pañol")
         pdf = ASSETS / "plano_panol.pdf"
         if pdf.exists():
             st.download_button("Descargar el plano en PDF", pdf.read_bytes(),

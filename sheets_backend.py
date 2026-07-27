@@ -64,7 +64,18 @@ DELTA_STOCK = {"INGRESO": 1, "DEVOLUCION": 1, "CONSUMO": -1, "PRESTADO": -1}
 
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
 
-ADMIN_INICIAL = ("juaniserrano410@gmail.com", "Serrano Juan", "ADMIN", "MANTENIMIENTO")
+def _admin_inicial():
+    """Primer usuario ADMIN, sembrado al crear la hoja Usuarios.
+
+    Sale de los secretos ([admin] en secrets.toml) para no dejar datos
+    personales escritos en el código.
+    """
+    try:
+        a = st.secrets["admin"]
+        return (a["email"], a.get("nombre", "Administrador"), "ADMIN",
+                a.get("sector", "MANTENIMIENTO"))
+    except Exception:
+        return ("", "Administrador", "ADMIN", "MANTENIMIENTO")
 
 
 def usando_sheets_reales() -> bool:
@@ -96,8 +107,9 @@ def _ws(nombre: str, crear_con=None):
         ws = ss.add_worksheet(title=nombre, rows=1000, cols=max(10, len(crear_con)))
         ws.append_row(crear_con)
         if nombre == HOJA_USUARIOS:
-            ws.append_row([ADMIN_INICIAL[0], ADMIN_INICIAL[1], ADMIN_INICIAL[2],
-                           ADMIN_INICIAL[3], "TRUE", ""])
+            admin = _admin_inicial()
+            if admin[0]:
+                ws.append_row([admin[0], admin[1], admin[2], admin[3], "TRUE", ""])
         return ws
 
 
@@ -148,9 +160,10 @@ def _leer_local(nombre: str, crear_con=None) -> pd.DataFrame:
 
     df = pd.DataFrame(columns=crear_con or [])
     if nombre == HOJA_USUARIOS:
-        df = pd.DataFrame([{"EMAIL": ADMIN_INICIAL[0], "NOMBRE": ADMIN_INICIAL[1], "ROL": ADMIN_INICIAL[2],
-                            "SECTOR": ADMIN_INICIAL[3], "ACTIVO": "TRUE", "PASSWORD_HASH": ""}],
-                          columns=COLS_USUARIOS)
+        admin = _admin_inicial()
+        df = pd.DataFrame([{"EMAIL": admin[0] or "admin@ejemplo.com", "NOMBRE": admin[1],
+                            "ROL": admin[2], "SECTOR": admin[3], "ACTIVO": "TRUE",
+                            "PASSWORD_HASH": ""}], columns=COLS_USUARIOS)
     DEVDATA_DIR.mkdir(exist_ok=True)
     df.to_csv(csv, index=False)
     return df

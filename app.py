@@ -1,4 +1,4 @@
-"""Pañol — app web del Htal. Sor María Ludovica: entrypoint, login y navegación por rol."""
+"""Pañol — app web: entrypoint, login y navegación por rol."""
 
 import streamlit as st
 

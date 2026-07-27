@@ -1,7 +1,7 @@
 # Pañol — guía para dejar la app operativa
 
-La app ya está adaptada a **tu** planilla real
-(`1g2_c8Pqxj_49hOlaTdCZO_-03qUZV4GmDJJMcpUwOoU`) y al plano del pañol.
+La app ya está adaptada a la estructura de la planilla del pañol
+(pestañas `Inventario`, `Vales APP`, `Registro APP`, `Parametros`, `Plano Pañol`).
 
 Ahora mismo funciona en **modo de prueba**: trabaja sobre una copia local de la
 planilla, así podés tocar todo sin miedo a romper los datos reales. Estos pasos
@@ -47,8 +47,8 @@ app entra con eso, sin usar tu cuenta personal.
 ## Paso 3 — Probar localmente contra la planilla real
 
 1. Copiá `.streamlit/secrets.toml.example` a `.streamlit/secrets.toml`.
-2. Completá los campos con los valores del `.json` descargado. El `sheet_id` ya
-   viene puesto con el de tu planilla.
+2. Completá los campos con los valores del `.json` descargado. En `sheet_id` va el ID de tu
+   planilla (está en su URL, entre `/d/` y `/edit`).
 3. Corré la app:
 
 ```bash
