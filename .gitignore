@@ -1,0 +1,5 @@
+_devdata/
+.streamlit/secrets.toml
+__pycache__/
+*.pyc
+*.json
