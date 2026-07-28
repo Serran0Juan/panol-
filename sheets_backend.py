@@ -14,6 +14,7 @@ planilla (_devdata/) para poder probar sin tocar los datos reales.
 """
 
 import datetime as dt
+import os
 from pathlib import Path
 
 import pandas as pd
@@ -47,20 +48,25 @@ COLS_INVENTARIO = {
     "categoria": "Categoria/Area",
     "subcategoria": "Subcategoria",
 }
-# Columnas de "Inventario" que la app puede escribir (el resto son fórmulas de la planilla).
-INVENTARIO_ESCRIBIBLES = {"descripcion", "stock_actual", "unidad", "ubicacion", "stock_minimo",
+# Columnas de "Inventario" que la app puede escribir.
+# OJO: "stock_actual" NO está y no debe estar. En la planilla es una fórmula
+# (=Stock Inicial − Consumo − Préstamos pendientes) que se calcula sola a partir
+# de "Registro APP". Si la app escribiera ahí, pisaría la fórmula y rompería el
+# cálculo automático de ese producto.
+INVENTARIO_ESCRIBIBLES = {"descripcion", "stock_inicial", "unidad", "ubicacion", "stock_minimo",
                           "precio_unitario", "categoria", "subcategoria"}
 
 COLS_VALES = ["ID VALE", "FECHA HORA", "TIPO MOVIMIENTO", "SECTOR", "ÁREA / SALA",
               "Receptor / Para Quien", "OBSERVACIONES", "ESTADO VALE", "DIAS RETRASO"]
 COLS_REGISTRO = ["ID_REGISTRO", "ID_VALE_REF", "ID_ITEM", "CANT", "UNIDAD", "TIPO_MOV",
-                 "DESCRIPCIÓN_ITEM", "FECHA_VALE", "OBSERVACIONES", "ESTADO_VALE (auto)"]
+                 "DESCRIPCIÓN_ITEM", "FECHA_VALE", "OBSERVACIONES", "ESTADO_VALE (auto)",
+                 "CANT_DEVUELTA", "ESTADO_RENGLON"]
 COLS_USUARIOS = ["EMAIL", "NOMBRE", "ROL", "SECTOR", "ACTIVO", "PASSWORD_HASH"]
 COLS_RECLAMOS = ["ID", "FECHA_HORA", "TIPO", "PRODUCTO", "DETALLE", "EMAIL", "NOMBRE", "ESTADO", "RESPUESTA"]
 
-TIPOS_MOVIMIENTO = ["CONSUMO", "PRESTADO", "DEVOLUCION", "INGRESO"]
-# efecto de cada tipo sobre el stock
-DELTA_STOCK = {"INGRESO": 1, "DEVOLUCION": 1, "CONSUMO": -1, "PRESTADO": -1}
+# Tipos que puede tener cada renglón de una entrega a un operario.
+TIPOS_ENTREGA = ["CONSUMO", "PRESTADO"]
+DIAS_PARA_DEMORA = 7
 
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
 
@@ -79,6 +85,17 @@ def _admin_inicial():
 
 
 def usando_sheets_reales() -> bool:
+    """True si hay credenciales y la app debe trabajar sobre la planilla real.
+
+    Dos frenos para poder probar sin riesgo de tocar los datos de producción:
+      - la variable de entorno PANOL_MODO_LOCAL=1
+      - la existencia del archivo _devdata/MODO_LOCAL
+    Cualquiera de los dos fuerza el modo local aunque haya credenciales.
+    """
+    if os.environ.get("PANOL_MODO_LOCAL") == "1":
+        return False
+    if (DEVDATA_DIR / "MODO_LOCAL").exists():
+        return False
     try:
         return "gcp_service_account" in st.secrets and "gcp" in st.secrets
     except Exception:
@@ -113,6 +130,16 @@ def _ws(nombre: str, crear_con=None):
         return ws
 
 
+def _completar_columnas(df: pd.DataFrame, columnas) -> pd.DataFrame:
+    """Agrega vacías las columnas esperadas que falten (planillas de versiones previas)."""
+    if not columnas:
+        return df
+    for c in columnas:
+        if c not in df.columns:
+            df[c] = ""
+    return df
+
+
 def _leer_hoja(nombre: str, crear_con=None) -> pd.DataFrame:
     valores = _ws(nombre, crear_con).get_all_values()
     if len(valores) < 2:
@@ -120,7 +147,7 @@ def _leer_hoja(nombre: str, crear_con=None) -> pd.DataFrame:
     encabezados = valores[0]
     ancho = len(encabezados)
     filas = [(f + [""] * ancho)[:ancho] for f in valores[1:]]
-    return pd.DataFrame(filas, columns=encabezados)
+    return _completar_columnas(pd.DataFrame(filas, columns=encabezados), crear_con)
 
 
 def _col_letra(idx: int) -> str:
@@ -140,7 +167,7 @@ def _leer_local(nombre: str, crear_con=None) -> pd.DataFrame:
 
     csv = DEVDATA_DIR / f"{nombre}.csv"
     if csv.exists():
-        return pd.read_csv(csv, dtype=str).fillna("")
+        return _completar_columnas(pd.read_csv(csv, dtype=str).fillna(""), crear_con)
 
     if SEED_XLSX.exists():
         wb = openpyxl.load_workbook(SEED_XLSX, data_only=True)
@@ -155,6 +182,7 @@ def _leer_local(nombre: str, crear_con=None) -> pd.DataFrame:
                 filas = [(f + [""] * ancho)[:ancho] for f in valores[1:]]
                 df = pd.DataFrame(filas, columns=encabezados)
                 df = df[df.apply(lambda r: any(str(v).strip() for v in r), axis=1)]
+                df = _completar_columnas(df, crear_con)
             df.to_csv(csv, index=False)
             return df
 
@@ -196,6 +224,27 @@ def limpiar_cache():
 
 
 # ------------------------------------------------------------------ Inventario
+
+_RANGO_CANT = "'Registro APP'!$D$2:$D$1999"
+_RANGO_ITEM = "'Registro APP'!$C$2:$C$1999"
+_RANGO_TIPO = "'Registro APP'!$F$2:$F$1999"
+_RANGO_DEVUELTA = "'Registro APP'!$K$2:$K$1999"
+_RANGO_ESTADO_RENGLON = "'Registro APP'!$L$2:$L$1999"
+
+
+def _formula_consumo(n: int) -> str:
+    """Consumo real de un producto: lo entregado menos el sobrante devuelto."""
+    return (f'=SUMIFS({_RANGO_CANT};{_RANGO_ITEM};A{n};{_RANGO_TIPO};"CONSUMO")'
+            f'-SUMIFS({_RANGO_DEVUELTA};{_RANGO_ITEM};A{n};{_RANGO_TIPO};"CONSUMO")')
+
+
+def _formula_prestamo(n: int) -> str:
+    """Préstamos sin devolver: entregado menos devuelto, solo renglones pendientes."""
+    return (f'=SUMIFS({_RANGO_CANT};{_RANGO_ITEM};A{n};{_RANGO_TIPO};"PRESTADO";'
+            f'{_RANGO_ESTADO_RENGLON};"PENDIENTE")'
+            f'-SUMIFS({_RANGO_DEVUELTA};{_RANGO_ITEM};A{n};{_RANGO_TIPO};"PRESTADO";'
+            f'{_RANGO_ESTADO_RENGLON};"PENDIENTE")')
+
 
 def _estado(stock_actual: float, stock_minimo: float) -> str:
     if stock_actual <= 0:
@@ -272,20 +321,26 @@ def add_item(descripcion, categoria, subcategoria, unidad, ubicacion,
              stock_minimo, stock_actual, precio_unitario):
     items = get_items()
     nuevo_id = int(items["id"].max()) + 1 if not items.empty else 1
+    n = int(items["_fila"].max()) + 1 if not items.empty else 2  # fila que va a ocupar
+
+    # Las columnas calculadas se cargan como fórmula, igual que el resto de la planilla.
     fila = {
         COLS_INVENTARIO["id"]: nuevo_id,
         COLS_INVENTARIO["descripcion"]: descripcion,
         COLS_INVENTARIO["stock_inicial"]: stock_actual,
-        COLS_INVENTARIO["stock_actual"]: stock_actual,
+        COLS_INVENTARIO["stock_actual"]: f"=C{n}-I{n}-J{n}",
         COLS_INVENTARIO["unidad"]: unidad,
         COLS_INVENTARIO["ubicacion"]: ubicacion,
+        COLS_INVENTARIO["estado_hoja"]: f'=IF(D{n}<=0;"🔴 SIN STOCK";IF(D{n}<=H{n};"🟡 MÍNIMO";"🟢 OK"))',
         COLS_INVENTARIO["stock_minimo"]: stock_minimo,
+        COLS_INVENTARIO["consumo"]: _formula_consumo(n),
+        COLS_INVENTARIO["prestamos_pendiente"]: _formula_prestamo(n),
         COLS_INVENTARIO["precio_unitario"]: precio_unitario,
+        COLS_INVENTARIO["total"]: f"=D{n}*K{n}",
         COLS_INVENTARIO["categoria"]: categoria,
         COLS_INVENTARIO["subcategoria"]: subcategoria,
     }
-    columnas = list(COLS_INVENTARIO.values())
-    _agregar_fila(HOJA_INVENTARIO, fila, columnas)
+    _agregar_fila(HOJA_INVENTARIO, fila, list(COLS_INVENTARIO.values()))
     limpiar_cache()
     return nuevo_id
 
@@ -302,13 +357,32 @@ def get_vales() -> pd.DataFrame:
 
 @st.cache_data(ttl=15, show_spinner=False)
 def get_registro() -> pd.DataFrame:
+    """Renglones de los vales, con la cantidad pendiente ya calculada."""
     df = _leer(HOJA_REGISTRO, COLS_REGISTRO)
     if df.empty:
-        return pd.DataFrame(columns=COLS_REGISTRO)
+        return pd.DataFrame(columns=COLS_REGISTRO + ["pendiente", "_fila"])
+    df["_fila"] = range(2, len(df) + 2)  # fila real en la planilla
     df = df[df["ID_REGISTRO"].astype(str).str.strip() != ""].copy()
-    for c in ["ID_ITEM", "CANT"]:
+    for c in ["ID_ITEM", "CANT", "CANT_DEVUELTA"]:
         df[c] = pd.to_numeric(df[c], errors="coerce").fillna(0)
+    # Renglones cargados antes de que existiera la columna: un préstamo sin
+    # estado se considera pendiente; cualquier otro tipo, ya cerrado.
+    df["ESTADO_RENGLON"] = df["ESTADO_RENGLON"].astype(str).str.strip().str.upper()
+    sin_estado = df["ESTADO_RENGLON"] == ""
+    df.loc[sin_estado, "ESTADO_RENGLON"] = df.loc[sin_estado, "TIPO_MOV"].apply(
+        lambda t: "PENDIENTE" if str(t).upper() == "PRESTADO" else "CERRADO")
+    df["pendiente"] = (df["CANT"] - df["CANT_DEVUELTA"]).clip(lower=0)
     return df.reset_index(drop=True)
+
+
+def dias_desde(fecha_texto: str) -> int:
+    """Días transcurridos desde una fecha de vale. -1 si no se puede interpretar."""
+    for formato in ("%Y-%m-%d %H:%M:%S", "%d/%m/%Y %H:%M:%S", "%d/%m/%Y %H:%M", "%d/%m/%Y", "%Y-%m-%d"):
+        try:
+            return (dt.datetime.now() - dt.datetime.strptime(str(fecha_texto).strip(), formato)).days
+        except ValueError:
+            continue
+    return -1
 
 
 def _siguiente_id_vale() -> str:
@@ -327,79 +401,180 @@ def _siguiente_id_registro() -> int:
     return int(nums.max()) + 1 if len(nums) else 1
 
 
-def registrar_vale(tipo, sector, area_sala, receptor, observaciones, renglones,
-                   fecha_dev_esperada=""):
-    """Crea un vale con uno o más renglones y ajusta el stock de cada producto.
+def registrar_vale(sector, area_sala, receptor, observaciones, renglones):
+    """Crea un vale (una entrega a un operario) con uno o más renglones.
 
-    renglones: lista de dicts con item_id, descripcion, cantidad, unidad.
-    Devuelve el ID del vale creado.
+    Cada renglón lleva su propio tipo: un mismo vale puede tener una herramienta
+    prestada y unos tornillos consumidos.
+
+    renglones: lista de dicts con item_id, descripcion, cantidad, unidad, tipo.
+
+    No toca el stock: en la planilla, "Stock Actual" es una fórmula que se
+    recalcula sola a partir de estos renglones.
     """
     if not renglones:
         raise ValueError("El vale no tiene renglones")
 
     id_vale = _siguiente_id_vale()
     ahora = dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    estado_vale = "ABIERTO" if tipo == "PRESTADO" else "CERRADO"
+
+    tipos = {r["tipo"] for r in renglones}
+    tipo_vale = tipos.pop() if len(tipos) == 1 else "MIXTO"
+    hay_prestamos = any(r["tipo"] == "PRESTADO" for r in renglones)
+    estado_vale = "ABIERTO" if hay_prestamos else "CERRADO"
 
     _agregar_fila(HOJA_VALES, {
-        "ID VALE": id_vale, "FECHA HORA": ahora, "TIPO MOVIMIENTO": tipo,
+        "ID VALE": id_vale, "FECHA HORA": ahora, "TIPO MOVIMIENTO": tipo_vale,
         "SECTOR": sector, "ÁREA / SALA": area_sala, "Receptor / Para Quien": receptor,
         "OBSERVACIONES": observaciones, "ESTADO VALE": estado_vale, "DIAS RETRASO": "",
     }, COLS_VALES)
 
     id_reg = _siguiente_id_registro()
-    items = get_items()
     for r in renglones:
+        # un préstamo queda esperando devolución; un consumo nace cerrado
+        estado_renglon = "PENDIENTE" if r["tipo"] == "PRESTADO" else "CERRADO"
         _agregar_fila(HOJA_REGISTRO, {
             "ID_REGISTRO": id_reg, "ID_VALE_REF": id_vale, "ID_ITEM": r["item_id"],
-            "CANT": r["cantidad"], "UNIDAD": r.get("unidad", ""), "TIPO_MOV": tipo,
+            "CANT": r["cantidad"], "UNIDAD": r.get("unidad", ""), "TIPO_MOV": r["tipo"],
             "DESCRIPCIÓN_ITEM": r["descripcion"], "FECHA_VALE": ahora,
             "OBSERVACIONES": observaciones, "ESTADO_VALE (auto)": estado_vale,
+            "CANT_DEVUELTA": 0, "ESTADO_RENGLON": estado_renglon,
         }, COLS_REGISTRO)
         id_reg += 1
-
-        fila = items[items["id"] == r["item_id"]]
-        if not fila.empty:
-            actual = float(fila.iloc[0]["stock_actual"])
-            nuevo = max(0.0, actual + DELTA_STOCK.get(tipo, 0) * float(r["cantidad"]))
-            update_item(int(r["item_id"]), stock_actual=nuevo)
 
     limpiar_cache()
     return id_vale
 
 
-def cerrar_vale(id_vale: str):
-    """Marca un préstamo como devuelto y repone el stock de sus renglones."""
+def _escribir_celda_registro(nro_fila: int, columna: str, valor):
+    """Escribe una celda puntual de un renglón de Registro APP."""
+    if usando_sheets_reales():
+        letra = _col_letra(COLS_REGISTRO.index(columna))
+        _ws(HOJA_REGISTRO).update(values=[[valor]], range_name=f"{letra}{nro_fila}",
+                                  value_input_option="USER_ENTERED")
+    else:
+        df = _leer_local(HOJA_REGISTRO, COLS_REGISTRO)
+        idx = nro_fila - 2
+        df[columna] = df[columna].astype(str)
+        df.at[idx, columna] = str(valor)
+        _guardar_local(HOJA_REGISTRO, df)
+
+
+def _recalcular_estado_vale(id_vale: str):
+    """Cierra el vale cuando ya no le queda ningún renglón pendiente."""
     reg = get_registro()
     renglones = reg[reg["ID_VALE_REF"] == id_vale]
-    items = get_items()
-
-    for r in renglones.itertuples():
-        fila = items[items["id"] == int(r.ID_ITEM)]
-        if not fila.empty:
-            nuevo = float(fila.iloc[0]["stock_actual"]) + float(r.CANT)
-            update_item(int(r.ID_ITEM), stock_actual=nuevo)
+    if renglones.empty:
+        return
+    sigue_abierto = (renglones["ESTADO_RENGLON"] == "PENDIENTE").any()
+    estado = "ABIERTO" if sigue_abierto else "CERRADO"
 
     if usando_sheets_reales():
         ws = _ws(HOJA_VALES)
         celda = ws.find(id_vale, in_column=1)
         if celda:
-            col = _col_letra(COLS_VALES.index("ESTADO VALE"))
-            ws.update(f"{col}{celda.row}", [["CERRADO"]])
-        ws_reg = _ws(HOJA_REGISTRO)
-        col_ref = COLS_REGISTRO.index("ID_VALE_REF") + 1
-        col_est = _col_letra(COLS_REGISTRO.index("ESTADO_VALE (auto)"))
-        for celda_reg in ws_reg.findall(id_vale, in_column=col_ref):
-            ws_reg.update(f"{col_est}{celda_reg.row}", [["CERRADO"]])
+            letra = _col_letra(COLS_VALES.index("ESTADO VALE"))
+            ws.update(values=[[estado]], range_name=f"{letra}{celda.row}")
     else:
         vales = _leer_local(HOJA_VALES, COLS_VALES)
-        vales.loc[vales["ID VALE"] == id_vale, "ESTADO VALE"] = "CERRADO"
+        vales.loc[vales["ID VALE"] == id_vale, "ESTADO VALE"] = estado
         _guardar_local(HOJA_VALES, vales)
-        regl = _leer_local(HOJA_REGISTRO, COLS_REGISTRO)
-        regl.loc[regl["ID_VALE_REF"] == id_vale, "ESTADO_VALE (auto)"] = "CERRADO"
-        _guardar_local(HOJA_REGISTRO, regl)
+
+    for _, r in renglones.iterrows():
+        _escribir_celda_registro(int(r["_fila"]), "ESTADO_VALE (auto)", estado)
+    limpiar_cache()
+
+
+def devolver_renglon(id_registro, cantidad: float):
+    """Registra la devolución (total o parcial) de un renglón.
+
+    Sirve tanto para una herramienta prestada como para el sobrante de un
+    consumo. El stock se repone solo, por la fórmula de la planilla.
+    """
+    reg = get_registro()
+    fila = reg[reg["ID_REGISTRO"].astype(str) == str(id_registro)]
+    if fila.empty:
+        raise ValueError(f"No existe el renglón {id_registro}")
+    fila = fila.iloc[0]
+
+    pendiente = float(fila["pendiente"])
+    cantidad = float(cantidad)
+    if cantidad <= 0:
+        raise ValueError("La cantidad a devolver tiene que ser mayor que cero")
+    if cantidad > pendiente:
+        raise ValueError(f"No podés devolver más de lo pendiente ({pendiente:g})")
+
+    nueva_devuelta = float(fila["CANT_DEVUELTA"]) + cantidad
+    nro_fila = int(fila["_fila"])
+    _escribir_celda_registro(nro_fila, "CANT_DEVUELTA", nueva_devuelta)
+    if nueva_devuelta >= float(fila["CANT"]):
+        _escribir_celda_registro(nro_fila, "ESTADO_RENGLON", "CERRADO")
 
     limpiar_cache()
+    _recalcular_estado_vale(fila["ID_VALE_REF"])
+
+
+def convertir_a_consumo(id_registro):
+    """El préstamo no vuelve (se perdió, se rompió o se lo quedaron).
+
+    Pasa el renglón a CONSUMO y lo cierra. No mueve el stock: préstamo y
+    consumo descuentan igual, solo cambia si se espera la devolución.
+    """
+    reg = get_registro()
+    fila = reg[reg["ID_REGISTRO"].astype(str) == str(id_registro)]
+    if fila.empty:
+        raise ValueError(f"No existe el renglón {id_registro}")
+    fila = fila.iloc[0]
+
+    nro_fila = int(fila["_fila"])
+    _escribir_celda_registro(nro_fila, "TIPO_MOV", "CONSUMO")
+    _escribir_celda_registro(nro_fila, "ESTADO_RENGLON", "CERRADO")
+
+    limpiar_cache()
+    _recalcular_estado_vale(fila["ID_VALE_REF"])
+
+
+def cerrar_vale(id_vale: str):
+    """Devuelve de una todo lo que quede pendiente en el vale."""
+    reg = get_registro()
+    pendientes = reg[(reg["ID_VALE_REF"] == id_vale) & (reg["ESTADO_RENGLON"] == "PENDIENTE")]
+    for _, r in pendientes.iterrows():
+        if r["pendiente"] > 0:
+            devolver_renglon(r["ID_REGISTRO"], r["pendiente"])
+    _recalcular_estado_vale(id_vale)
+
+
+def registrar_ingreso(item_id, cantidad, observaciones, responsable):
+    """Reposición del pañol: suma al Stock Inicial y deja constancia del ingreso.
+
+    Provisional hasta que rediseñemos la sección de Ingresos: las fórmulas de la
+    planilla solo restan consumos y préstamos, no suman ingresos, así que la
+    entrada se carga sobre "Stock Inicial" y el renglón queda como historial.
+    """
+    items = get_items()
+    fila = items[items["id"] == int(item_id)]
+    if fila.empty:
+        raise ValueError(f"No existe el producto {item_id}")
+    fila = fila.iloc[0]
+
+    id_vale = _siguiente_id_vale()
+    ahora = dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    _agregar_fila(HOJA_VALES, {
+        "ID VALE": id_vale, "FECHA HORA": ahora, "TIPO MOVIMIENTO": "INGRESO",
+        "SECTOR": "", "ÁREA / SALA": "", "Receptor / Para Quien": responsable,
+        "OBSERVACIONES": observaciones, "ESTADO VALE": "CERRADO", "DIAS RETRASO": "",
+    }, COLS_VALES)
+    _agregar_fila(HOJA_REGISTRO, {
+        "ID_REGISTRO": _siguiente_id_registro(), "ID_VALE_REF": id_vale,
+        "ID_ITEM": int(item_id), "CANT": cantidad, "UNIDAD": fila["unidad"],
+        "TIPO_MOV": "INGRESO", "DESCRIPCIÓN_ITEM": fila["descripcion"],
+        "FECHA_VALE": ahora, "OBSERVACIONES": observaciones,
+        "ESTADO_VALE (auto)": "CERRADO", "CANT_DEVUELTA": 0, "ESTADO_RENGLON": "CERRADO",
+    }, COLS_REGISTRO)
+
+    update_item(int(item_id), stock_inicial=float(fila["stock_inicial"]) + float(cantidad))
+    limpiar_cache()
+    return id_vale
 
 
 # ------------------------------------------------------------------ Usuarios

@@ -3,3 +3,4 @@ _devdata/
 __pycache__/
 *.pyc
 *.json
+_backup/

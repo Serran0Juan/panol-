@@ -124,6 +124,49 @@ Los roles definen qué ve cada uno:
   los seleccionás todos y los mandás a una estantería de una sola vez.
 - **Usuarios**: alta, baja y reinicio de contraseñas.
 
+---
+
+## Cómo se calcula el stock (importante)
+
+**La app no escribe el stock.** En la planilla, "Stock Actual" es una fórmula:
+
+```
+Stock Actual = Stock Inicial − Consumos − Préstamos pendientes
+```
+
+Los consumos y préstamos salen de las filas de `Registro APP`. Es decir: la app
+solo registra movimientos, y tu planilla recalcula el stock sola. Por eso en la
+sección Inventario se edita el **Stock Inicial** y no el actual.
+
+Cada renglón de `Registro APP` lleva:
+
+| Columna | Para qué |
+|---|---|
+| `CANT` | lo que se entregó |
+| `CANT_DEVUELTA` | lo que volvió (devolución total, parcial o sobrante) |
+| `ESTADO_RENGLON` | PENDIENTE mientras falte devolver; CERRADO cuando está saldado |
+
+Un vale se cierra solo cuando ninguno de sus renglones queda pendiente.
+
+## Probar sin tocar los datos reales
+
+Para correr la app en modo de prueba (sobre una copia local, sin riesgo):
+
+```bash
+py -3 -c "open('panol_web/_devdata/MODO_LOCAL','w').close()"
+```
+
+Mientras ese archivo exista, la app trabaja sobre `_devdata/` y muestra un cartel
+amarillo de aviso. Borralo para volver a la planilla real. Las pruebas
+(`_prueba_movimientos.py`) fuerzan ese modo solas y abortan si detectan que
+podrían escribir en producción.
+
+Si alguna vez hay que deshacer los cambios de fórmulas en la planilla:
+
+```bash
+py -3 migracion_formulas.py restaurar
+```
+
 ## Ideas para más adelante
 
 - Código QR pegado en cada estantería que abra el listado de esa ubicación.

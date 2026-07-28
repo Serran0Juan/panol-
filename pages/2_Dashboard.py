@@ -5,7 +5,8 @@ import plotly.express as px
 import streamlit as st
 
 from auth import current_user
-from sheets_backend import get_items, get_reclamos, get_registro, get_vales
+from sheets_backend import (DIAS_PARA_DEMORA, dias_desde, get_items, get_reclamos,
+                            get_registro, get_vales)
 
 if current_user() is None:
     st.stop()
@@ -22,9 +23,9 @@ if items.empty:
 
 sin_stock = int((items["estado"] == "🔴 Sin stock").sum())
 minimo = int((items["estado"] == "🟡 Mínimo").sum())
+# un vale queda ABIERTO solo mientras le falte devolver algún préstamo
 prestamos_abiertos = (
-    vales[(vales["TIPO MOVIMIENTO"] == "PRESTADO") & (vales["ESTADO VALE"].str.upper() == "ABIERTO")]
-    if not vales.empty else pd.DataFrame()
+    vales[vales["ESTADO VALE"].str.upper() == "ABIERTO"] if not vales.empty else pd.DataFrame()
 )
 reclamos_abiertos = (
     reclamos[reclamos["ESTADO"].str.upper() == "ABIERTO"] if not reclamos.empty else pd.DataFrame()
@@ -90,12 +91,26 @@ else:
     )
 
 if not prestamos_abiertos.empty:
+    pend = prestamos_abiertos.copy()
+    pend["dias"] = pend["FECHA HORA"].apply(dias_desde)
+    demorados = pend[pend["dias"] >= DIAS_PARA_DEMORA].sort_values("dias", ascending=False)
+
+    if not demorados.empty:
+        st.subheader(f"⏰ Préstamos demorados (más de {DIAS_PARA_DEMORA} días)")
+        st.dataframe(
+            demorados[["ID VALE", "Receptor / Para Quien", "SECTOR", "dias", "FECHA HORA"]]
+            .rename(columns={"ID VALE": "Vale", "Receptor / Para Quien": "Prestado a",
+                             "SECTOR": "Sector", "dias": "Días", "FECHA HORA": "Desde"}),
+            hide_index=True, use_container_width=True,
+        )
+
     st.subheader("⏳ Préstamos sin devolver")
     st.dataframe(
-        prestamos_abiertos[["ID VALE", "FECHA HORA", "Receptor / Para Quien", "SECTOR", "ÁREA / SALA"]]
+        pend[["ID VALE", "FECHA HORA", "Receptor / Para Quien", "SECTOR", "ÁREA / SALA", "dias"]]
+        .sort_values("dias", ascending=False)
         .rename(columns={"ID VALE": "Vale", "FECHA HORA": "Fecha",
                          "Receptor / Para Quien": "Prestado a", "SECTOR": "Sector",
-                         "ÁREA / SALA": "Área"}),
+                         "ÁREA / SALA": "Área", "dias": "Días"}),
         hide_index=True, use_container_width=True,
     )
 

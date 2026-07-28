@@ -16,11 +16,11 @@ if usuario is None:
 paginas = [
     st.Page("pages/1_Buscar_Productos.py", title="Buscar productos", icon="🔍"),
     st.Page("pages/6_Plano.py", title="Plano del pañol", icon="🗺️"),
-    st.Page("pages/3_Movimientos.py", title="Movimientos", icon="🔄"),
     st.Page("pages/4_Reclamos.py", title="Pedidos y reclamos", icon="📢"),
 ]
 if puede_gestionar(usuario):
     paginas += [
+        st.Page("pages/3_Movimientos.py", title="Movimientos", icon="🔄"),
         st.Page("pages/2_Dashboard.py", title="Dashboard", icon="📊"),
         st.Page("pages/5_Inventario.py", title="Inventario", icon="📦"),
         st.Page("pages/7_Ubicaciones.py", title="Asignar ubicaciones", icon="📍"),

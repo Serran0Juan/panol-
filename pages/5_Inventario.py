@@ -64,17 +64,23 @@ with tab_editar:
                                               help="Número de estantería, ej. 18 o 18-2 (estantería-nivel)")
                 with e2:
                     unidad = st.text_input("Unidad", item["unidad"])
-                    stock_actual = st.number_input("Stock actual", min_value=0.0,
-                                                   value=float(item["stock_actual"]), step=1.0)
+                    stock_inicial = st.number_input(
+                        "Stock inicial", min_value=0.0, value=float(item["stock_inicial"]), step=1.0,
+                        help="El stock actual NO se edita: la planilla lo calcula como "
+                             "stock inicial menos consumos menos préstamos pendientes.")
                     stock_minimo = st.number_input("Stock mínimo", min_value=0.0,
                                                    value=float(item["stock_minimo"]), step=1.0)
                     precio = st.number_input("Precio unitario ($)", min_value=0.0,
                                              value=float(item["precio_unitario"]), step=1.0)
 
+                st.info(f"**Stock actual: {item['stock_actual']:g} {item['unidad']}** "
+                        f"= inicial {item['stock_inicial']:g} − consumos − préstamos pendientes. "
+                        "Se recalcula solo con cada movimiento.")
+
                 if st.form_submit_button("Guardar cambios", type="primary"):
                     update_item(int(item["id"]), descripcion=descripcion, categoria=categoria,
                                 subcategoria=subcategoria, ubicacion=ubicacion, unidad=unidad,
-                                stock_actual=stock_actual, stock_minimo=stock_minimo,
+                                stock_inicial=stock_inicial, stock_minimo=stock_minimo,
                                 precio_unitario=precio)
                     st.success("Producto actualizado en la planilla.")
                     st.rerun()
