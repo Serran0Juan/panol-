@@ -12,9 +12,9 @@ from auth import PERMISOS, ROLES, puede  # noqa: E402
 
 ESPERADO = {
     "ADMIN": {"ver_gestion", "registrar_movimiento", "editar_inventario",
-              "resolver_reclamos", "administrar"},
-    "JEFE": {"ver_gestion", "registrar_movimiento"},
-    "COORDINADOR": {"ver_gestion", "registrar_movimiento"},
+              "resolver_reclamos", "gestionar_ot", "administrar"},
+    "JEFE": {"ver_gestion", "registrar_movimiento", "gestionar_ot"},
+    "COORDINADOR": {"ver_gestion", "registrar_movimiento", "gestionar_ot"},
     "LECTOR": {"ver_gestion"},
     "OPERARIO": set(),
 }

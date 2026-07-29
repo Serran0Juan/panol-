@@ -23,12 +23,16 @@ ITERACIONES = 200_000
 #   registrar_movimiento: cargar entregas, devoluciones e ingresos
 #   editar_inventario   : dar de alta y modificar materiales y sus ubicaciones
 #   resolver_reclamos   : responder y cerrar los pedidos de los operarios
+#   gestionar_ot        : asignar órdenes de trabajo y moverlas de estado
 #   administrar         : usuarios, permisos y configuración
+#
+# Cargar una solicitud de reparación y cerrar las órdenes propias lo puede
+# hacer cualquier usuario, así que no llevan permiso.
 PERMISOS = {
     "ADMIN": {"ver_gestion", "registrar_movimiento", "editar_inventario",
-              "resolver_reclamos", "administrar"},
-    "JEFE": {"ver_gestion", "registrar_movimiento"},
-    "COORDINADOR": {"ver_gestion", "registrar_movimiento"},
+              "resolver_reclamos", "gestionar_ot", "administrar"},
+    "JEFE": {"ver_gestion", "registrar_movimiento", "gestionar_ot"},
+    "COORDINADOR": {"ver_gestion", "registrar_movimiento", "gestionar_ot"},
     "LECTOR": {"ver_gestion"},
     "OPERARIO": set(),
 }

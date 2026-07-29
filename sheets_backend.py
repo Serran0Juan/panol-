@@ -30,6 +30,8 @@ HOJA_PARAMETROS = "Parametros"
 HOJA_PLANO = "Plano Pañol"
 HOJA_USUARIOS = "Usuarios"
 HOJA_RECLAMOS = "Reclamos"
+HOJA_ORDENES = "Ordenes"
+HOJA_OT_ESTADOS = "OT_Estados"
 
 # nombre interno -> encabezado exacto en la planilla
 COLS_INVENTARIO = {
@@ -65,6 +67,30 @@ COLS_REGISTRO = ["ID_REGISTRO", "ID_VALE_REF", "ID_ITEM", "CANT", "UNIDAD", "TIP
                  "CANT_DEVUELTA", "ESTADO_RENGLON"]
 COLS_USUARIOS = ["EMAIL", "NOMBRE", "ROL", "SECTOR", "ACTIVO", "PASSWORD_HASH"]
 COLS_RECLAMOS = ["ID", "FECHA_HORA", "TIPO", "PRODUCTO", "DETALLE", "EMAIL", "NOMBRE", "ESTADO", "RESPUESTA"]
+
+# ── Mantenimiento correctivo: órdenes de trabajo ──
+COLS_ORDENES = ["ID_OT", "FECHA_ALTA", "SOLICITANTE", "SOLICITANTE_EMAIL", "AREA",
+                "DESCRIPCION", "PRIORIDAD", "SECTOR_ASIGNADO", "ASIGNADO_A", "ESTADO",
+                "FECHA_ASIGNACION", "FECHA_CIERRE", "TRABAJO_REALIZADO", "CAUSA",
+                "HORAS", "VALE_REF", "OBSERVACIONES"]
+COLS_OT_ESTADOS = ["ID", "ID_OT", "FECHA_HORA", "ESTADO", "USUARIO", "NOTA"]
+
+# El circuito de una orden. Desde cualquier estado se puede ANULAR.
+ESTADOS_OT = ["SOLICITADA", "ASIGNADA", "EN CURSO", "PAUSADA", "RESUELTA", "ANULADA"]
+ESTADOS_ABIERTOS = ("SOLICITADA", "ASIGNADA", "EN CURSO", "PAUSADA")
+TRANSICIONES_OT = {
+    "SOLICITADA": ["ASIGNADA", "ANULADA"],
+    "ASIGNADA": ["EN CURSO", "PAUSADA", "RESUELTA", "ANULADA"],
+    "EN CURSO": ["PAUSADA", "RESUELTA", "ANULADA"],
+    "PAUSADA": ["EN CURSO", "RESUELTA", "ANULADA"],
+    "RESUELTA": [],
+    "ANULADA": [],
+}
+PRIORIDADES = ["BAJA", "MEDIA", "ALTA", "URGENTE"]
+ICONO_ESTADO_OT = {
+    "SOLICITADA": "🆕", "ASIGNADA": "📌", "EN CURSO": "🔧",
+    "PAUSADA": "⏸️", "RESUELTA": "✅", "ANULADA": "🚫",
+}
 
 # Tipos que puede tener cada renglón de una entrega a un operario.
 TIPOS_ENTREGA = ["CONSUMO", "PRESTADO"]
@@ -472,18 +498,29 @@ def registrar_vale(sector, area_sala, receptor, observaciones, renglones, regist
     return id_vale
 
 
+def _escribir_celdas(hoja: str, columnas: list, nro_fila: int, cambios: dict):
+    """Escribe celdas puntuales de una fila, sin pisar el resto."""
+    cambios = {k: v for k, v in cambios.items() if k in columnas}
+    if not cambios:
+        return
+    if usando_sheets_reales():
+        ws = _ws(hoja, columnas)
+        ws.batch_update(
+            [{"range": f"{_col_letra(columnas.index(c))}{nro_fila}", "values": [[v]]}
+             for c, v in cambios.items()],
+            value_input_option="USER_ENTERED")
+    else:
+        df = _leer_local(hoja, columnas)
+        idx = nro_fila - 2
+        for c, v in cambios.items():
+            df[c] = df[c].astype(str)
+            df.at[idx, c] = str(v)
+        _guardar_local(hoja, df)
+
+
 def _escribir_celda_registro(nro_fila: int, columna: str, valor):
     """Escribe una celda puntual de un renglón de Registro APP."""
-    if usando_sheets_reales():
-        letra = _col_letra(COLS_REGISTRO.index(columna))
-        _ws(HOJA_REGISTRO).update(values=[[valor]], range_name=f"{letra}{nro_fila}",
-                                  value_input_option="USER_ENTERED")
-    else:
-        df = _leer_local(HOJA_REGISTRO, COLS_REGISTRO)
-        idx = nro_fila - 2
-        df[columna] = df[columna].astype(str)
-        df.at[idx, columna] = str(valor)
-        _guardar_local(HOJA_REGISTRO, df)
+    _escribir_celdas(HOJA_REGISTRO, COLS_REGISTRO, nro_fila, {columna: valor})
 
 
 def _recalcular_estado_vale(id_vale: str):
@@ -747,3 +784,121 @@ def numero_estanteria(ubicacion: str) -> str:
 
     m = re.search(r"\d+", str(ubicacion or ""))
     return m.group(0).zfill(2) if m else ""
+
+
+# ══════════════════════════════════ Órdenes de trabajo (correctivo) ══════════
+
+@st.cache_data(ttl=15, show_spinner=False)
+def get_ordenes() -> pd.DataFrame:
+    """Órdenes de trabajo, con la fila real de la planilla para poder editarlas."""
+    df = _leer(HOJA_ORDENES, COLS_ORDENES)
+    if df.empty:
+        return pd.DataFrame(columns=COLS_ORDENES + ["_fila", "dias_abierta"])
+    df["_fila"] = range(2, len(df) + 2)
+    df = df[df["ID_OT"].astype(str).str.strip() != ""].copy()
+    if df.empty:
+        return pd.DataFrame(columns=COLS_ORDENES + ["_fila", "dias_abierta"])
+    df["ESTADO"] = df["ESTADO"].astype(str).str.strip().str.upper().replace("", "SOLICITADA")
+    df["HORAS"] = pd.to_numeric(df["HORAS"], errors="coerce").fillna(0)
+    df["dias_abierta"] = df["FECHA_ALTA"].apply(dias_desde)
+    return df.reset_index(drop=True)
+
+
+@st.cache_data(ttl=15, show_spinner=False)
+def get_ot_estados() -> pd.DataFrame:
+    """Bitácora de cambios de estado de las órdenes."""
+    df = _leer(HOJA_OT_ESTADOS, COLS_OT_ESTADOS)
+    if df.empty:
+        return pd.DataFrame(columns=COLS_OT_ESTADOS)
+    return df[df["ID_OT"].astype(str).str.strip() != ""].reset_index(drop=True)
+
+
+def _siguiente_id_ot() -> str:
+    ordenes = get_ordenes()
+    if ordenes.empty:
+        return "OT-0001"
+    nums = pd.to_numeric(
+        ordenes["ID_OT"].astype(str).str.extract(r"(\d+)", expand=False), errors="coerce").dropna()
+    return f"OT-{int(nums.max()) + 1 if len(nums) else 1:04d}"
+
+
+def _anotar_estado(id_ot: str, estado: str, usuario: str, nota: str = ""):
+    estados = get_ot_estados()
+    nums = pd.to_numeric(estados["ID"], errors="coerce").dropna() if not estados.empty else pd.Series(dtype=float)
+    _agregar_fila(HOJA_OT_ESTADOS, {
+        "ID": int(nums.max()) + 1 if len(nums) else 1,
+        "ID_OT": id_ot,
+        "FECHA_HORA": dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "ESTADO": estado, "USUARIO": usuario, "NOTA": nota,
+    }, COLS_OT_ESTADOS)
+
+
+def crear_solicitud(area, descripcion, prioridad, solicitante, solicitante_email,
+                    observaciones=""):
+    """Alta de una solicitud de reparación. Nace como orden en estado SOLICITADA."""
+    id_ot = _siguiente_id_ot()
+    ahora = dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    _agregar_fila(HOJA_ORDENES, {
+        "ID_OT": id_ot, "FECHA_ALTA": ahora, "SOLICITANTE": solicitante,
+        "SOLICITANTE_EMAIL": solicitante_email, "AREA": area, "DESCRIPCION": descripcion,
+        "PRIORIDAD": prioridad, "SECTOR_ASIGNADO": "", "ASIGNADO_A": "",
+        "ESTADO": "SOLICITADA", "FECHA_ASIGNACION": "", "FECHA_CIERRE": "",
+        "TRABAJO_REALIZADO": "", "CAUSA": "", "HORAS": "", "VALE_REF": "",
+        "OBSERVACIONES": observaciones,
+    }, COLS_ORDENES)
+    _anotar_estado(id_ot, "SOLICITADA", solicitante, descripcion[:120])
+    limpiar_cache()
+    return id_ot
+
+
+def _fila_orden(id_ot: str):
+    ordenes = get_ordenes()
+    fila = ordenes[ordenes["ID_OT"].astype(str) == str(id_ot)]
+    if fila.empty:
+        raise ValueError(f"No existe la orden {id_ot}")
+    return fila.iloc[0]
+
+
+def asignar_orden(id_ot, sector, asignado_a, prioridad, usuario, nota=""):
+    """Asigna la orden a un sector y a una persona, y la pasa a ASIGNADA."""
+    fila = _fila_orden(id_ot)
+    cambios = {"SECTOR_ASIGNADO": sector, "ASIGNADO_A": asignado_a, "PRIORIDAD": prioridad}
+    if fila["ESTADO"] == "SOLICITADA":
+        cambios["ESTADO"] = "ASIGNADA"
+        cambios["FECHA_ASIGNACION"] = dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    _escribir_celdas(HOJA_ORDENES, COLS_ORDENES, int(fila["_fila"]), cambios)
+    _anotar_estado(id_ot, cambios.get("ESTADO", fila["ESTADO"]), usuario,
+                   nota or f"Asignada a {asignado_a} ({sector})")
+    limpiar_cache()
+
+
+def cambiar_estado_orden(id_ot, nuevo_estado, usuario, nota=""):
+    """Mueve la orden a otro estado, validando que la transición sea posible."""
+    fila = _fila_orden(id_ot)
+    actual = fila["ESTADO"]
+    if nuevo_estado not in TRANSICIONES_OT.get(actual, []):
+        raise ValueError(f"No se puede pasar de {actual} a {nuevo_estado}")
+
+    cambios = {"ESTADO": nuevo_estado}
+    if nuevo_estado in ("RESUELTA", "ANULADA"):
+        cambios["FECHA_CIERRE"] = dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    _escribir_celdas(HOJA_ORDENES, COLS_ORDENES, int(fila["_fila"]), cambios)
+    _anotar_estado(id_ot, nuevo_estado, usuario, nota)
+    limpiar_cache()
+
+
+def cerrar_orden(id_ot, trabajo_realizado, causa, horas, usuario, nota=""):
+    """Cierre técnico: qué se hizo, por qué pasó y cuánto llevó."""
+    fila = _fila_orden(id_ot)
+    if fila["ESTADO"] not in ("ASIGNADA", "EN CURSO", "PAUSADA"):
+        raise ValueError(f"Una orden {fila['ESTADO']} no se puede cerrar")
+    if not str(trabajo_realizado).strip():
+        raise ValueError("Contá qué trabajo se hizo antes de cerrar")
+
+    _escribir_celdas(HOJA_ORDENES, COLS_ORDENES, int(fila["_fila"]), {
+        "ESTADO": "RESUELTA",
+        "FECHA_CIERRE": dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "TRABAJO_REALIZADO": trabajo_realizado, "CAUSA": causa, "HORAS": horas,
+    })
+    _anotar_estado(id_ot, "RESUELTA", usuario, nota or trabajo_realizado[:120])
+    limpiar_cache()

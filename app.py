@@ -33,6 +33,13 @@ if puede("ver_gestion"):
         st.Page("pages/4_Reclamos.py", title="Pedidos y reclamos", icon="📢"),
     ]
 
+    mantenimiento = [st.Page("pages/12_Solicitudes.py", title="Solicitudes", icon="📝")]
+    if puede("gestionar_ot"):
+        mantenimiento.append(
+            st.Page("pages/13_Ordenes.py", title="Órdenes de trabajo", icon="🔧"))
+    mantenimiento.append(
+        st.Page("pages/14_Mis_Ordenes.py", title="Mis órdenes", icon="🧰"))
+
     paginas = {
         "Pañol": [
             st.Page("pages/0_Panel.py", title="Panel de control", icon="🏠", default=True),
@@ -40,6 +47,7 @@ if puede("ver_gestion"):
             st.Page("pages/6_Plano.py", title="Plano del pañol", icon="🗺️"),
         ],
         "Movimientos": movimientos,
+        "Mantenimiento": mantenimiento,
         "Inventario": [
             st.Page("pages/5_Inventario.py", title="Materiales", icon="📦"),
             st.Page("pages/7_Ubicaciones.py", title="Ubicaciones", icon="📍"),
@@ -53,6 +61,10 @@ else:
         "Pañol": [
             st.Page("pages/1_Buscar_Productos.py", title="Buscar material", icon="🔍", default=True),
             st.Page("pages/6_Plano.py", title="Plano del pañol", icon="🗺️"),
+        ],
+        "Mantenimiento": [
+            st.Page("pages/12_Solicitudes.py", title="Solicitudes", icon="📝"),
+            st.Page("pages/14_Mis_Ordenes.py", title="Mis órdenes", icon="🧰"),
         ],
         "Lo mío": [
             st.Page("pages/10_Mi_Historial.py", title="Mi historial", icon="📜"),
