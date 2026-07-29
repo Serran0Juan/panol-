@@ -35,10 +35,14 @@ if puede("ver_gestion"):
 
     mantenimiento = [st.Page("pages/12_Solicitudes.py", title="Solicitudes", icon="📝")]
     if puede("gestionar_ot"):
-        mantenimiento.append(
-            st.Page("pages/13_Ordenes.py", title="Órdenes de trabajo", icon="🔧"))
-    mantenimiento.append(
-        st.Page("pages/14_Mis_Ordenes.py", title="Mis órdenes", icon="🧰"))
+        mantenimiento += [
+            st.Page("pages/13_Ordenes.py", title="Órdenes de trabajo", icon="🔧"),
+            st.Page("pages/15_Agenda.py", title="Agenda", icon="📅"),
+        ]
+    mantenimiento += [
+        st.Page("pages/16_Tablero.py", title="Tablero de jefatura", icon="📈"),
+        st.Page("pages/14_Mis_Ordenes.py", title="Mis órdenes", icon="🧰"),
+    ]
 
     paginas = {
         "Pañol": [

@@ -72,7 +72,8 @@ COLS_RECLAMOS = ["ID", "FECHA_HORA", "TIPO", "PRODUCTO", "DETALLE", "EMAIL", "NO
 COLS_ORDENES = ["ID_OT", "FECHA_ALTA", "SOLICITANTE", "SOLICITANTE_EMAIL", "AREA",
                 "DESCRIPCION", "PRIORIDAD", "SECTOR_ASIGNADO", "ASIGNADO_A", "ESTADO",
                 "FECHA_ASIGNACION", "FECHA_CIERRE", "TRABAJO_REALIZADO", "CAUSA",
-                "HORAS", "VALE_REF", "OBSERVACIONES"]
+                "HORAS", "VALE_REF", "OBSERVACIONES",
+                "FECHA_COMPROMISO", "FECHA_PROGRAMADA", "HORAS_ESTIMADAS"]
 COLS_OT_ESTADOS = ["ID", "ID_OT", "FECHA_HORA", "ESTADO", "USUARIO", "NOTA"]
 
 # El circuito de una orden. Desde cualquier estado se puede ANULAR.
@@ -87,6 +88,13 @@ TRANSICIONES_OT = {
     "ANULADA": [],
 }
 PRIORIDADES = ["BAJA", "MEDIA", "ALTA", "URGENTE"]
+ORDEN_PRIORIDAD = {"URGENTE": 0, "ALTA": 1, "MEDIA": 2, "BAJA": 3}
+
+# Plazo comprometido según la prioridad, en días corridos desde el alta.
+# Se calcula solo al asignar, pero se puede pisar orden por orden.
+SLA_DIAS = {"URGENTE": 0, "ALTA": 3, "MEDIA": 7, "BAJA": 15}
+HORAS_ESTIMADAS_DEFECTO = 1.0
+HORAS_JORNADA = 6  # horas útiles por persona y por día, para medir la carga
 ICONO_ESTADO_OT = {
     "SOLICITADA": "🆕", "ASIGNADA": "📌", "EN CURSO": "🔧",
     "PAUSADA": "⏸️", "RESUELTA": "✅", "ANULADA": "🚫",
@@ -424,6 +432,23 @@ def get_movimientos() -> pd.DataFrame:
     df = reg.merge(vales[columnas], left_on="ID_VALE_REF", right_on="ID VALE", how="left")
     return df.fillna({"SECTOR": "", "ÁREA / SALA": "", "Receptor / Para Quien": "",
                       "REGISTRADO_POR": ""})
+
+
+FORMATOS_FECHA = ("%Y-%m-%d %H:%M:%S", "%d/%m/%Y %H:%M:%S", "%d/%m/%Y %H:%M",
+                  "%d/%m/%Y", "%Y-%m-%d")
+
+
+def parse_fecha(texto):
+    """Interpreta una fecha guardada en la planilla. None si no se puede."""
+    t = str(texto).strip()
+    if not t:
+        return None
+    for formato in FORMATOS_FECHA:
+        try:
+            return dt.datetime.strptime(t, formato)
+        except ValueError:
+            continue
+    return None
 
 
 def dias_desde(fecha_texto: str) -> int:
@@ -799,9 +824,36 @@ def get_ordenes() -> pd.DataFrame:
     if df.empty:
         return pd.DataFrame(columns=COLS_ORDENES + ["_fila", "dias_abierta"])
     df["ESTADO"] = df["ESTADO"].astype(str).str.strip().str.upper().replace("", "SOLICITADA")
+    df["PRIORIDAD"] = df["PRIORIDAD"].astype(str).str.strip().str.upper()
     df["HORAS"] = pd.to_numeric(df["HORAS"], errors="coerce").fillna(0)
+    df["HORAS_ESTIMADAS"] = pd.to_numeric(df["HORAS_ESTIMADAS"], errors="coerce").fillna(0)
     df["dias_abierta"] = df["FECHA_ALTA"].apply(dias_desde)
+    df["orden_prioridad"] = df["PRIORIDAD"].map(ORDEN_PRIORIDAD).fillna(9)
+
+    hoy = dt.date.today()
+    # se arman como listas y no con .apply(): pandas convertiría los None en NaT
+    # y después NaT no se puede restar con una fecha
+    compromisos = [parse_fecha(v) for v in df["FECHA_COMPROMISO"]]
+    df["dias_para_vencer"] = [
+        (f.date() - hoy).days if f is not None else None for f in compromisos]
+    abierta = df["ESTADO"].isin(ESTADOS_ABIERTOS)
+    df["vencida"] = [
+        bool(a and d is not None and d < 0)
+        for a, d in zip(abierta, df["dias_para_vencer"])]
+    df["vence_hoy"] = [
+        bool(a and d == 0) for a, d in zip(abierta, df["dias_para_vencer"])]
+
+    df["dia_programado"] = [
+        f.date() if f is not None else None
+        for f in (parse_fecha(v) for v in df["FECHA_PROGRAMADA"])]
     return df.reset_index(drop=True)
+
+
+def calcular_compromiso(prioridad: str, desde=None) -> str:
+    """Fecha comprometida según la prioridad. Devuelve texto listo para la planilla."""
+    base = desde or dt.datetime.now()
+    dias = SLA_DIAS.get(str(prioridad).strip().upper(), 7)
+    return (base + dt.timedelta(days=dias)).strftime("%Y-%m-%d")
 
 
 @st.cache_data(ttl=15, show_spinner=False)
@@ -859,16 +911,46 @@ def _fila_orden(id_ot: str):
     return fila.iloc[0]
 
 
-def asignar_orden(id_ot, sector, asignado_a, prioridad, usuario, nota=""):
-    """Asigna la orden a un sector y a una persona, y la pasa a ASIGNADA."""
+def asignar_orden(id_ot, sector, asignado_a, prioridad, usuario, nota="",
+                  fecha_compromiso=None, fecha_programada=None, horas_estimadas=None):
+    """Asigna la orden a un sector y a una persona, y la pasa a ASIGNADA.
+
+    Si no se indica fecha de compromiso, se calcula sola a partir de la
+    prioridad (ver SLA_DIAS). Se puede pisar pasando fecha_compromiso.
+    """
     fila = _fila_orden(id_ot)
     cambios = {"SECTOR_ASIGNADO": sector, "ASIGNADO_A": asignado_a, "PRIORIDAD": prioridad}
+
+    if fecha_compromiso:
+        cambios["FECHA_COMPROMISO"] = fecha_compromiso
+    elif not str(fila["FECHA_COMPROMISO"]).strip() or fila["PRIORIDAD"] != prioridad:
+        # sin plazo todavía, o cambió la prioridad: se recalcula
+        cambios["FECHA_COMPROMISO"] = calcular_compromiso(
+            prioridad, parse_fecha(fila["FECHA_ALTA"]))
+    if fecha_programada is not None:
+        cambios["FECHA_PROGRAMADA"] = fecha_programada
+    if horas_estimadas is not None:
+        cambios["HORAS_ESTIMADAS"] = horas_estimadas
+    elif not float(fila["HORAS_ESTIMADAS"] or 0):
+        cambios["HORAS_ESTIMADAS"] = HORAS_ESTIMADAS_DEFECTO
+
     if fila["ESTADO"] == "SOLICITADA":
         cambios["ESTADO"] = "ASIGNADA"
         cambios["FECHA_ASIGNACION"] = dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
     _escribir_celdas(HOJA_ORDENES, COLS_ORDENES, int(fila["_fila"]), cambios)
     _anotar_estado(id_ot, cambios.get("ESTADO", fila["ESTADO"]), usuario,
                    nota or f"Asignada a {asignado_a} ({sector})")
+    limpiar_cache()
+
+
+def programar_orden(id_ot, fecha_programada, usuario, horas_estimadas=None):
+    """Agenda la orden para un día. Pasar '' desaparece de la agenda."""
+    fila = _fila_orden(id_ot)
+    cambios = {"FECHA_PROGRAMADA": fecha_programada or ""}
+    if horas_estimadas is not None:
+        cambios["HORAS_ESTIMADAS"] = horas_estimadas
+    _escribir_celdas(HOJA_ORDENES, COLS_ORDENES, int(fila["_fila"]), cambios)
     limpiar_cache()
 
 
@@ -902,3 +984,56 @@ def cerrar_orden(id_ot, trabajo_realizado, causa, horas, usuario, nota=""):
     })
     _anotar_estado(id_ot, "RESUELTA", usuario, nota or trabajo_realizado[:120])
     limpiar_cache()
+
+
+def indicadores_mantenimiento(ordenes: pd.DataFrame) -> dict:
+    """Métricas de gestión para el tablero de jefatura."""
+    if ordenes.empty:
+        return {"total": 0, "abiertas": 0, "vencidas": 0, "vence_hoy": 0,
+                "sin_asignar": 0, "resueltas": 0, "dias_promedio": None,
+                "cumplimiento": None, "horas_cerradas": 0}
+
+    abiertas = ordenes[ordenes["ESTADO"].isin(ESTADOS_ABIERTOS)]
+    resueltas = ordenes[ordenes["ESTADO"] == "RESUELTA"]
+
+    # cuánto tardó cada orden resuelta, de punta a punta
+    duraciones, en_plazo = [], []
+    for _, o in resueltas.iterrows():
+        alta, cierre = parse_fecha(o["FECHA_ALTA"]), parse_fecha(o["FECHA_CIERRE"])
+        if alta and cierre:
+            duraciones.append((cierre - alta).total_seconds() / 86400)
+        compromiso = parse_fecha(o["FECHA_COMPROMISO"])
+        if cierre and compromiso:
+            en_plazo.append(cierre.date() <= compromiso.date())
+
+    return {
+        "total": len(ordenes),
+        "abiertas": len(abiertas),
+        "vencidas": int(ordenes["vencida"].sum()),
+        "vence_hoy": int(ordenes["vence_hoy"].sum()),
+        "sin_asignar": int((ordenes["ESTADO"] == "SOLICITADA").sum()),
+        "resueltas": len(resueltas),
+        "dias_promedio": round(sum(duraciones) / len(duraciones), 1) if duraciones else None,
+        "cumplimiento": round(100 * sum(en_plazo) / len(en_plazo)) if en_plazo else None,
+        "horas_cerradas": float(resueltas["HORAS"].sum()),
+    }
+
+
+def carga_por_persona(ordenes: pd.DataFrame) -> pd.DataFrame:
+    """Horas pendientes por responsable, para ver quién está saturado."""
+    if ordenes.empty:
+        return pd.DataFrame(columns=["persona", "ordenes", "horas", "vencidas", "capacidad"])
+
+    abiertas = ordenes[ordenes["ESTADO"].isin(ESTADOS_ABIERTOS) &
+                       (ordenes["ASIGNADO_A"].astype(str).str.strip() != "")]
+    if abiertas.empty:
+        return pd.DataFrame(columns=["persona", "ordenes", "horas", "vencidas", "capacidad"])
+
+    resumen = abiertas.groupby("ASIGNADO_A").agg(
+        ordenes=("ID_OT", "count"),
+        horas=("HORAS_ESTIMADAS", "sum"),
+        vencidas=("vencida", "sum"),
+    ).reset_index().rename(columns={"ASIGNADO_A": "persona"})
+    # capacidad = qué parte de una semana laboral ocupan esas horas
+    resumen["capacidad"] = (resumen["horas"] / (HORAS_JORNADA * 5)).round(2)
+    return resumen.sort_values("horas", ascending=False)

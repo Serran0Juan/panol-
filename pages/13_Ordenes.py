@@ -4,9 +4,11 @@ import pandas as pd
 import streamlit as st
 
 from auth import current_user, exigir
-from sheets_backend import (ESTADOS_ABIERTOS, ICONO_ESTADO_OT, PRIORIDADES, TRANSICIONES_OT,
-                            asignar_orden, cambiar_estado_orden, cerrar_orden, get_ordenes,
-                            get_ot_estados, get_parametros, get_usuarios_activos)
+from sheets_backend import (ESTADOS_ABIERTOS, HORAS_ESTIMADAS_DEFECTO, ICONO_ESTADO_OT,
+                            PRIORIDADES, SLA_DIAS, TRANSICIONES_OT, asignar_orden,
+                            calcular_compromiso, cambiar_estado_orden, cerrar_orden,
+                            get_ordenes, get_ot_estados, get_parametros,
+                            get_usuarios_activos, parse_fecha)
 
 usuario = current_user()
 if usuario is None:
@@ -31,11 +33,12 @@ sin_asignar = ordenes[ordenes["ESTADO"] == "SOLICITADA"]
 urgentes = abiertas[abiertas["PRIORIDAD"].str.upper() == "URGENTE"]
 resueltas = ordenes[ordenes["ESTADO"] == "RESUELTA"]
 
-k1, k2, k3, k4 = st.columns(4)
+k1, k2, k3, k4, k5 = st.columns(5)
 k1.metric("Abiertas", len(abiertas))
 k2.metric("Sin asignar", len(sin_asignar))
 k3.metric("Urgentes 🔴", len(urgentes))
-k4.metric("Resueltas", len(resueltas))
+k4.metric("Vencidas ⏰", int(ordenes["vencida"].sum()))
+k5.metric("Resueltas", len(resueltas))
 
 st.divider()
 
@@ -73,13 +76,17 @@ with tab_tablero:
         ]
 
     st.caption(f"{len(vista)} de {len(ordenes)} órdenes")
-    tabla = vista.sort_values("ID_OT", ascending=False)[
+    tabla = vista.sort_values(["vencida", "orden_prioridad", "ID_OT"],
+                              ascending=[False, True, False])[
         ["ID_OT", "FECHA_ALTA", "AREA", "DESCRIPCION", "PRIORIDAD", "SECTOR_ASIGNADO",
-         "ASIGNADO_A", "ESTADO", "dias_abierta", "SOLICITANTE"]
+         "ASIGNADO_A", "ESTADO", "FECHA_COMPROMISO", "dias_para_vencer",
+         "FECHA_PROGRAMADA", "dias_abierta", "SOLICITANTE"]
     ].rename(columns={
         "ID_OT": "OT", "FECHA_ALTA": "Alta", "AREA": "Lugar", "DESCRIPCION": "Problema",
         "PRIORIDAD": "Prioridad", "SECTOR_ASIGNADO": "Sector", "ASIGNADO_A": "Responsable",
-        "ESTADO": "Estado", "dias_abierta": "Días", "SOLICITANTE": "Pidió",
+        "ESTADO": "Estado", "FECHA_COMPROMISO": "Vence",
+        "dias_para_vencer": "Días restantes", "FECHA_PROGRAMADA": "Programada",
+        "dias_abierta": "Días abierta", "SOLICITANTE": "Pidió",
     })
     st.dataframe(tabla, hide_index=True, width="stretch", height=420)
     st.download_button("⬇️ Descargar CSV", tabla.to_csv(index=False).encode("utf-8-sig"),
@@ -146,8 +153,28 @@ with tab_detalle:
                 asignado = st.selectbox("Responsable", opciones_p, index=idx_p)
                 idx_pri = PRIORIDADES.index(o["PRIORIDAD"]) if o["PRIORIDAD"] in PRIORIDADES else 1
                 prioridad = st.selectbox("Prioridad", PRIORIDADES, index=idx_pri)
+                horas_est = st.number_input(
+                    "Horas estimadas", min_value=0.0, step=0.5,
+                    value=float(o["HORAS_ESTIMADAS"] or HORAS_ESTIMADAS_DEFECTO),
+                    help="Sirve para calcular la carga de trabajo de cada persona.")
+
+                compromiso_auto = calcular_compromiso(prioridad, parse_fecha(o["FECHA_ALTA"]))
+                pisar = st.checkbox("Elegir otra fecha de vencimiento",
+                                    help=f"Por prioridad {prioridad} vence el {compromiso_auto}.")
+                fecha_compromiso = None
+                if pisar:
+                    actual = parse_fecha(o["FECHA_COMPROMISO"]) or parse_fecha(compromiso_auto)
+                    elegida_f = st.date_input("Vence el", value=actual.date(),
+                                              format="DD/MM/YYYY")
+                    fecha_compromiso = elegida_f.strftime("%Y-%m-%d")
+                else:
+                    st.caption(f"Vencimiento automático: **{compromiso_auto}** "
+                               f"({SLA_DIAS.get(prioridad, 7)} días desde el alta)")
+
                 if st.form_submit_button("Guardar asignación", type="primary"):
-                    asignar_orden(id_ot, sector, asignado, prioridad, usuario["NOMBRE"])
+                    asignar_orden(id_ot, sector, asignado, prioridad, usuario["NOMBRE"],
+                                  fecha_compromiso=fecha_compromiso,
+                                  horas_estimadas=horas_est)
                     st.success(f"{id_ot} asignada a {asignado}.")
                     st.rerun()
 

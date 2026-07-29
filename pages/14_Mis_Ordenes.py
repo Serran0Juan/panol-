@@ -1,5 +1,6 @@
 """Mis órdenes: las reparaciones asignadas a cada uno."""
 
+import pandas as pd
 import streamlit as st
 
 from auth import current_user
@@ -38,10 +39,9 @@ if abiertas.empty:
     st.success("No te queda ninguna orden pendiente.")
 else:
     st.subheader("Pendientes")
-    orden_prioridad = {"URGENTE": 0, "ALTA": 1, "MEDIA": 2, "BAJA": 3}
-    pendientes = abiertas.assign(
-        _orden=abiertas["PRIORIDAD"].str.upper().map(orden_prioridad).fillna(9)
-    ).sort_values(["_orden", "ID_OT"])
+    # lo vencido primero, después por prioridad
+    pendientes = abiertas.sort_values(["vencida", "orden_prioridad", "ID_OT"],
+                                      ascending=[False, True, True])
 
     for _, o in pendientes.iterrows():
         id_ot = o["ID_OT"]
@@ -55,6 +55,20 @@ else:
             st.write(o["DESCRIPCION"])
             if o["OBSERVACIONES"]:
                 st.caption(f"Contacto: {o['OBSERVACIONES']}")
+
+            # ojo: pandas deja NaN (no None) cuando la orden no tiene fecha
+            d = o["dias_para_vencer"]
+            if d is not None and not pd.isna(d):
+                d = int(d)
+                if d < 0:
+                    st.error(f"⏰ Vencida hace {abs(d)} día(s) — era para el "
+                             f"{o['FECHA_COMPROMISO']}")
+                elif d == 0:
+                    st.warning("Vence hoy")
+                else:
+                    st.caption(f"Vence en {d} día(s) — {o['FECHA_COMPROMISO']}")
+            if o["dia_programado"]:
+                st.caption(f"📅 Programada para el {o['dia_programado'].strftime('%d/%m/%Y')}")
 
             # cambiar de estado sin salir de la tarjeta
             posibles = [e for e in TRANSICIONES_OT.get(estado, []) if e not in ("RESUELTA", "ANULADA")]
