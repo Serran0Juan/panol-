@@ -51,7 +51,7 @@ if puede("ver_gestion"):
             st.Page("pages/6_Plano.py", title="Plano del pañol", icon="🗺️"),
         ],
         "Movimientos": movimientos,
-        "Correctivo": mantenimiento,
+        "Trabajos correctivos": mantenimiento,
         "Inventario": [
             st.Page("pages/5_Inventario.py", title="Materiales", icon="📦"),
             st.Page("pages/7_Ubicaciones.py", title="Ubicaciones", icon="📍"),
@@ -66,7 +66,7 @@ else:
             st.Page("pages/1_Buscar_Productos.py", title="Buscar material", icon="🔍", default=True),
             st.Page("pages/6_Plano.py", title="Plano del pañol", icon="🗺️"),
         ],
-        "Correctivo": [
+        "Trabajos correctivos": [
             st.Page("pages/12_Solicitudes.py", title="Solicitudes", icon="📝"),
             st.Page("pages/14_Mis_Ordenes.py", title="Mis órdenes", icon="🧰"),
         ],

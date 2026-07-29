@@ -15,6 +15,7 @@ planilla (_devdata/) para poder probar sin tocar los datos reales.
 
 import datetime as dt
 import os
+import re
 from pathlib import Path
 
 import pandas as pd
@@ -166,6 +167,48 @@ def _ws(nombre: str, crear_con=None):
         return ws
 
 
+def a_numero(valor) -> float:
+    """Convierte a número un valor que puede venir formateado desde la planilla.
+
+    Google Sheets devuelve el texto tal como se ve: "$ 10.000", "1.000",
+    "1.234,56". Hay que distinguir cuándo el punto separa miles y cuándo es
+    la coma decimal, o si no "$ 10.000" se leería como diez.
+    """
+    if valor is None or isinstance(valor, bool):
+        return 0.0
+    if isinstance(valor, (int, float)):
+        return float(valor)
+
+    t = re.sub(r"[^\d,.\-]", "", str(valor)).strip()
+    if not t or t in ("-", ".", ","):
+        return 0.0
+
+    tiene_punto, tiene_coma = "." in t, "," in t
+    if tiene_punto and tiene_coma:
+        # el separador decimal es el que aparece más a la derecha
+        if t.rfind(",") > t.rfind("."):
+            t = t.replace(".", "").replace(",", ".")
+        else:
+            t = t.replace(",", "")
+    elif tiene_coma:
+        t = t.replace(",", ".") if t.count(",") == 1 else t.replace(",", "")
+    elif tiene_punto:
+        entero, _, decimales = t.rpartition(".")
+        # "10.000" son diez mil; "0.125" y "7791.88" son decimales
+        miles = (t.count(".") > 1
+                 or (len(decimales) == 3 and entero.lstrip("-") not in ("", "0")))
+        t = t.replace(".", "") if miles else t
+
+    try:
+        return float(t)
+    except ValueError:
+        return 0.0
+
+
+def _a_numeros(serie) -> pd.Series:
+    return pd.Series([a_numero(v) for v in serie], index=serie.index, dtype="float64")
+
+
 def _completar_columnas(df: pd.DataFrame, columnas) -> pd.DataFrame:
     """Agrega vacías las columnas esperadas que falten (planillas de versiones previas)."""
     if not columnas:
@@ -176,8 +219,17 @@ def _completar_columnas(df: pd.DataFrame, columnas) -> pd.DataFrame:
     return df
 
 
-def _leer_hoja(nombre: str, crear_con=None) -> pd.DataFrame:
-    valores = _ws(nombre, crear_con).get_all_values()
+def _leer_hoja(nombre: str, crear_con=None, sin_formato=False) -> pd.DataFrame:
+    """Lee una hoja completa.
+
+    sin_formato=True pide los valores crudos en vez del texto que se ve. Se usa
+    en Inventario, donde los precios se muestran redondeados ("$ 7.792" para
+    7791,88) y ese redondeo desviaría la valorización. No conviene en las hojas
+    con fechas: ahí los valores crudos vienen como número de serie.
+    """
+    ws = _ws(nombre, crear_con)
+    valores = (ws.get_all_values(value_render_option="UNFORMATTED_VALUE")
+               if sin_formato else ws.get_all_values())
     if len(valores) < 2:
         return pd.DataFrame(columns=valores[0] if valores else (crear_con or []))
     encabezados = valores[0]
@@ -238,9 +290,9 @@ def _guardar_local(nombre: str, df: pd.DataFrame):
     df.to_csv(DEVDATA_DIR / f"{nombre}.csv", index=False)
 
 
-def _leer(nombre: str, crear_con=None) -> pd.DataFrame:
+def _leer(nombre: str, crear_con=None, sin_formato=False) -> pd.DataFrame:
     if usando_sheets_reales():
-        return _leer_hoja(nombre, crear_con)
+        return _leer_hoja(nombre, crear_con, sin_formato)
     return _leer_local(nombre, crear_con)
 
 
@@ -292,7 +344,8 @@ def _estado(stock_actual: float, stock_minimo: float) -> str:
 
 @st.cache_data(ttl=30, show_spinner=False)
 def get_items() -> pd.DataFrame:
-    crudo = _leer(HOJA_INVENTARIO)
+    # sin formato: los precios se muestran redondeados y eso desviaría el total
+    crudo = _leer(HOJA_INVENTARIO, sin_formato=True)
     if crudo.empty:
         return pd.DataFrame(columns=list(COLS_INVENTARIO))
 
@@ -304,10 +357,7 @@ def get_items() -> pd.DataFrame:
     df = df[df["descripcion"].astype(str).str.strip() != ""]
 
     for c in ["id", "stock_actual", "stock_minimo", "precio_unitario", "stock_inicial"]:
-        df[c] = pd.to_numeric(
-            df[c].astype(str).str.replace(r"[^\d,.\-]", "", regex=True).str.replace(",", ".", regex=False),
-            errors="coerce",
-        ).fillna(0)
+        df[c] = _a_numeros(df[c])
     df["id"] = df["id"].astype(int)
 
     for c in ["descripcion", "categoria", "subcategoria", "unidad", "ubicacion",
@@ -401,7 +451,7 @@ def get_registro() -> pd.DataFrame:
     df["_fila"] = range(2, len(df) + 2)  # fila real en la planilla
     df = df[df["ID_REGISTRO"].astype(str).str.strip() != ""].copy()
     for c in ["ID_ITEM", "CANT", "CANT_DEVUELTA"]:
-        df[c] = pd.to_numeric(df[c], errors="coerce").fillna(0)
+        df[c] = _a_numeros(df[c])
     # Renglones cargados antes de que existiera la columna: un préstamo sin
     # estado se considera pendiente; cualquier otro tipo, ya cerrado.
     df["ESTADO_RENGLON"] = df["ESTADO_RENGLON"].astype(str).str.strip().str.upper()
@@ -825,8 +875,8 @@ def get_ordenes() -> pd.DataFrame:
         return pd.DataFrame(columns=COLS_ORDENES + ["_fila", "dias_abierta"])
     df["ESTADO"] = df["ESTADO"].astype(str).str.strip().str.upper().replace("", "SOLICITADA")
     df["PRIORIDAD"] = df["PRIORIDAD"].astype(str).str.strip().str.upper()
-    df["HORAS"] = pd.to_numeric(df["HORAS"], errors="coerce").fillna(0)
-    df["HORAS_ESTIMADAS"] = pd.to_numeric(df["HORAS_ESTIMADAS"], errors="coerce").fillna(0)
+    df["HORAS"] = _a_numeros(df["HORAS"])
+    df["HORAS_ESTIMADAS"] = _a_numeros(df["HORAS_ESTIMADAS"])
     df["dias_abierta"] = df["FECHA_ALTA"].apply(dias_desde)
     df["orden_prioridad"] = df["PRIORIDAD"].map(ORDEN_PRIORIDAD).fillna(9)
 
