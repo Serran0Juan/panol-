@@ -58,7 +58,7 @@ with tab_editar:
             .rename(columns={"id": "N°", "descripcion": "Descripción", "categoria": "Categoría",
                              "ubicacion": "Ubicación", "stock_actual": "Stock",
                              "unidad": "Unidad", "stock_minimo": "Mínimo", "estado": "Estado"}),
-            hide_index=True, use_container_width=True, height=380,
+            hide_index=True, width="stretch", height=380,
         )
 
         if not puede_editar:
@@ -156,7 +156,7 @@ with tab_valor:
                    .sort_values("valor", ascending=False))
         st.dataframe(
             por_cat.rename(columns={"categoria": "Categoría", "valor": "Valor del stock ($)"}),
-            hide_index=True, use_container_width=True,
+            hide_index=True, width="stretch",
         )
 
         st.subheader("Detalle por material")
@@ -176,5 +176,5 @@ with tab_valor:
             .rename(columns={"id": "N°", "descripcion": "Descripción", "categoria": "Categoría",
                              "stock_actual": "Stock", "unidad": "Unidad",
                              "precio_unitario": "Precio unit. ($)", "valor": "Valor ($)"}),
-            hide_index=True, use_container_width=True, height=380,
+            hide_index=True, width="stretch", height=380,
         )

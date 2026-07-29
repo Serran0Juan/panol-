@@ -10,7 +10,11 @@ from PIL import Image, ImageDraw, ImageFont
 
 ASSETS = Path(__file__).parent / "assets"
 TITULO = ["Sistema de Gestión", "Integral de Mantenimiento"]
-AZUL = (15, 42, 74)
+
+# La barra lateral es azul noche, así que el logo va en claro.
+CELESTE = (111, 168, 220)
+BLANCO = (245, 249, 255)
+GRIS_CLARO = (157, 180, 206)
 
 
 def fuente(tam):
@@ -28,15 +32,15 @@ def generar(ancho, alto, tam_fuente, salida, con_texto=True):
 
     # marquita cuadrada a la izquierda
     lado = alto - 8
-    d.rounded_rectangle([0, 4, lado, 4 + lado], radius=8, fill=AZUL)
-    d.rectangle([lado * 0.28, alto * 0.42, lado * 0.72, alto * 0.68], fill=(255, 255, 255))
+    d.rounded_rectangle([0, 4, lado, 4 + lado], radius=8, fill=CELESTE)
+    d.rectangle([lado * 0.28, alto * 0.42, lado * 0.72, alto * 0.68], fill=(14, 32, 56))
 
     if con_texto:
         f1 = fuente(tam_fuente)
         f2 = fuente(tam_fuente + 2)
         x = lado + 12
-        d.text((x, alto * 0.18), TITULO[0], font=f1, fill=(90, 105, 125))
-        d.text((x, alto * 0.46), TITULO[1], font=f2, fill=AZUL)
+        d.text((x, alto * 0.18), TITULO[0], font=f1, fill=GRIS_CLARO)
+        d.text((x, alto * 0.46), TITULO[1], font=f2, fill=BLANCO)
 
     ASSETS.mkdir(exist_ok=True)
     img.save(ASSETS / salida)

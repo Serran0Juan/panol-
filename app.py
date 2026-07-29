@@ -4,11 +4,13 @@ from pathlib import Path
 
 import streamlit as st
 
+import estilo
 from auth import current_user, login_widget, puede
 from sheets_backend import usando_sheets_reales
 
 st.set_page_config(page_title="Sistema de Gestión Integral de Mantenimiento",
                    page_icon="🧰", layout="wide")
+estilo.aplicar()
 
 ASSETS = Path(__file__).parent / "assets"
 if (ASSETS / "logo_sidebar.png").exists():
@@ -68,7 +70,7 @@ with st.sidebar:
     st.caption(f"{usuario['ROL']} · {usuario.get('SECTOR', '')}")
     if not usando_sheets_reales():
         st.warning("Modo de prueba: copia local, no la planilla real (ver SETUP.md).")
-    if st.button("Cerrar sesión", use_container_width=True):
+    if st.button("Cerrar sesión", width="stretch"):
         st.session_state.pop("usuario", None)
         st.rerun()
 

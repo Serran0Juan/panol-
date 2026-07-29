@@ -62,7 +62,7 @@ with tab_usuarios:
                 lambda h: "definida" if str(h).strip() else "sin definir (la elige al entrar)")
             st.dataframe(
                 vista[["EMAIL", "NOMBRE", "ROL", "SECTOR", "ACTIVO", "CONTRASEÑA"]],
-                hide_index=True, use_container_width=True,
+                hide_index=True, width="stretch",
             )
 
             st.divider()
@@ -72,18 +72,18 @@ with tab_usuarios:
 
             a1, a2 = st.columns(2)
             with a1:
-                if st.button("Reiniciar contraseña", use_container_width=True):
+                if st.button("Reiniciar contraseña", width="stretch"):
                     set_password_hash(elegido, "")
                     st.success(f"{elegido} va a elegir una nueva la próxima vez que entre.")
                     st.rerun()
             with a2:
                 if activo:
-                    if st.button("Desactivar acceso", use_container_width=True,
+                    if st.button("Desactivar acceso", width="stretch",
                                  disabled=elegido == usuario["EMAIL"]):
                         set_usuario_activo(elegido, False)
                         st.rerun()
                 else:
-                    if st.button("Reactivar acceso", use_container_width=True):
+                    if st.button("Reactivar acceso", width="stretch"):
                         set_usuario_activo(elegido, True)
                         st.rerun()
 
@@ -134,7 +134,7 @@ with tab_permisos:
         for etiqueta, permiso in ACCIONES:
             fila[etiqueta] = "✅" if permiso is None or permiso in PERMISOS[rol] else "—"
         filas.append(fila)
-    st.dataframe(pd.DataFrame(filas), hide_index=True, use_container_width=True)
+    st.dataframe(pd.DataFrame(filas), hide_index=True, width="stretch")
 
     st.subheader("Para qué sirve cada perfil")
     for rol, texto in DESCRIPCION_ROLES.items():
@@ -153,7 +153,7 @@ with tab_catalogo:
     st.dataframe(
         resumen.rename(columns={"categoria": "Categoría", "materiales": "Materiales",
                                 "unidades": "Unidades en stock"}),
-        hide_index=True, use_container_width=True,
+        hide_index=True, width="stretch",
     )
 
     st.subheader("Listas desplegables de la planilla")
@@ -180,7 +180,7 @@ with tab_ubic:
                              "materiales": "Materiales asignados", "objetos": "Qué guarda",
                              "ancho": "Ancho (m)", "profundidad": "Prof. (m)",
                              "estantes": "N° estantes"}),
-            hide_index=True, use_container_width=True, height=420,
+            hide_index=True, width="stretch", height=420,
         )
         vacias = tabla[tabla["materiales"] == 0]
         if not vacias.empty:

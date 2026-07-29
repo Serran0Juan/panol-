@@ -55,7 +55,7 @@ tabla = vista.sort_values("ID_REGISTRO", ascending=False)[
     "ESTADO_RENGLON": "Estado", "OBSERVACIONES": "Observaciones",
 })
 
-st.dataframe(tabla, hide_index=True, use_container_width=True, height=480)
+st.dataframe(tabla, hide_index=True, width="stretch", height=480)
 
 st.download_button("⬇️ Descargar CSV", tabla.to_csv(index=False).encode("utf-8-sig"),
                    file_name="historial_panol.csv", mime="text/csv")

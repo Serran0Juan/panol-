@@ -22,7 +22,7 @@ tab_plano, tab_estanterias = st.tabs(["📐 Plano", "🗄️ Estanterías"])
 with tab_plano:
     plano = ASSETS / "plano_panol.png"
     if plano.exists():
-        st.image(str(plano), use_container_width=True,
+        st.image(str(plano), width="stretch",
                  caption="Plano de ubicación de stock del pañol")
         pdf = ASSETS / "plano_panol.pdf"
         if pdf.exists():
@@ -55,7 +55,7 @@ with tab_estanterias:
         filtradas[["estanteria", "area", "objetos", "ancho", "profundidad", "estantes"]]
         .rename(columns={"estanteria": "Estantería", "area": "Área", "objetos": "Qué guarda",
                          "ancho": "Ancho (m)", "profundidad": "Prof. (m)", "estantes": "N° estantes"}),
-        hide_index=True, use_container_width=True, height=400,
+        hide_index=True, width="stretch", height=400,
     )
 
     st.divider()
@@ -77,5 +77,5 @@ with tab_estanterias:
                     dentro[["id", "descripcion", "ubicacion", "stock_actual", "unidad", "estado"]]
                     .rename(columns={"id": "N°", "descripcion": "Producto", "ubicacion": "Ubicación",
                                      "stock_actual": "Stock", "unidad": "Unidad", "estado": "Estado"}),
-                    hide_index=True, use_container_width=True,
+                    hide_index=True, width="stretch",
                 )

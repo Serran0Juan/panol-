@@ -66,7 +66,7 @@ with tab_entrega:
                              "(pero podés registrar el sobrante después).")
     with p4:
         st.write("")
-        if st.button("Agregar", use_container_width=True, key="ent_agregar"):
+        if st.button("Agregar", width="stretch", key="ent_agregar"):
             st.session_state["carrito"].append({
                 "item_id": int(item["id"]), "descripcion": item["descripcion"],
                 "cantidad": float(cantidad), "unidad": item["unidad"], "tipo": tipo,
@@ -171,7 +171,7 @@ with tab_pendientes:
                 cab1.markdown(titulo)
                 cab1.caption(f"{v['SECTOR']} · {v['ÁREA / SALA'] or 'sin área'}"
                              + (f" · {v['OBSERVACIONES']}" if v["OBSERVACIONES"] else ""))
-                if cab2.button("Devolver todo", key=f"todo_{id_vale}", use_container_width=True):
+                if cab2.button("Devolver todo", key=f"todo_{id_vale}", width="stretch"):
                     cerrar_vale(id_vale)
                     st.success(f"Vale {id_vale} cerrado.")
                     st.rerun()
@@ -194,13 +194,13 @@ with tab_pendientes:
                         cant_dev = f2.number_input("Devolver", min_value=0.0, max_value=pend,
                                                    value=pend, step=1.0, key=f"cd_{rid}",
                                                    label_visibility="collapsed")
-                        if f3.button("Devolver", key=f"dev_{rid}", use_container_width=True):
+                        if f3.button("Devolver", key=f"dev_{rid}", width="stretch"):
                             devolver_renglon(rid, cant_dev)
                             st.success(f"Devolución registrada: {cant_dev:g} {r['UNIDAD']}.")
                             st.rerun()
                         if r["TIPO_MOV"] == "PRESTADO":
                             if f4.button("No vuelve → consumo", key=f"cons_{rid}",
-                                         use_container_width=True):
+                                         width="stretch"):
                                 convertir_a_consumo(rid)
                                 st.success("Marcado como consumo. El stock queda descontado.")
                                 st.rerun()

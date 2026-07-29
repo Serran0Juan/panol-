@@ -61,7 +61,7 @@ with tab_todos:
             reclamos[["FECHA_HORA", "TIPO", "PRODUCTO", "DETALLE", "NOMBRE", "ESTADO"]]
             .rename(columns={"FECHA_HORA": "Fecha", "TIPO": "Tipo", "PRODUCTO": "Producto",
                              "DETALLE": "Detalle", "NOMBRE": "Pidió", "ESTADO": "Estado"}),
-            hide_index=True, use_container_width=True,
+            hide_index=True, width="stretch",
         )
     else:
         solo_abiertos = st.checkbox("Ver solo los abiertos", value=True)

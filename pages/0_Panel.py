@@ -38,19 +38,30 @@ movs_hoy = (movimientos[movimientos["FECHA_VALE"].astype(str).str.startswith(hoy
             if not movimientos.empty else pd.DataFrame())
 
 # ───────────────────────────────────────────────── indicadores
-k1, k2, k3, k4, k5 = st.columns(5)
-k1.metric("Productos activos", f"{len(items):,}".replace(",", "."))
-k2.metric("Movimientos hoy", len(movs_hoy))
-k3.metric("Solicitudes pendientes", len(pendientes))
-k4.metric("Sin stock 🔴", sin_stock)
-k5.metric("En mínimo 🟡", en_minimo)
+def money(n: float) -> str:
+    """Monto corto, para que entre en la tarjeta: 208.342.653 -> $208,3 M."""
+    if n >= 1_000_000:
+        return f"${n / 1_000_000:,.1f} M".replace(",", "X").replace(".", ",").replace("X", ".")
+    if n >= 1_000:
+        return f"${n / 1_000:,.0f} mil".replace(",", ".")
+    return f"${n:,.0f}".replace(",", ".")
+
 
 valor = items["valor"].sum()
 sin_ubicacion = int((items["ubicacion"].str.strip() == "").sum())
-v1, v2, v3 = st.columns(3)
-v1.metric("Valor del inventario", f"${valor:,.0f}".replace(",", "."))
+
+k1, k2, k3, k4 = st.columns(4)
+k1.metric("Materiales", f"{len(items):,}".replace(",", "."))
+k2.metric("Movim. hoy", len(movs_hoy))
+k3.metric("Sin stock 🔴", sin_stock)
+k4.metric("En mínimo 🟡", en_minimo)
+
+v1, v2, v3, v4 = st.columns(4)
+v1.metric("Valor del stock", money(valor),
+          help=f"${valor:,.0f}".replace(",", "."))
 v2.metric("Préstamos abiertos", len(abiertos))
-v3.metric("Sin ubicación asignada", sin_ubicacion)
+v3.metric("Solicitudes", len(pendientes))
+v4.metric("Sin ubicación", sin_ubicacion)
 
 st.divider()
 
@@ -69,7 +80,7 @@ else:
                          "CANT": "Cant.", "UNIDAD": "Un.", "SECTOR": "Sector",
                          "Receptor / Para Quien": "Para quién",
                          "REGISTRADO_POR": "Registrado por"}),
-        hide_index=True, use_container_width=True, height=420,
+        hide_index=True, width="stretch", height=420,
     )
 
 # ───────────────────────────────────────────────── préstamos demorados
@@ -83,7 +94,7 @@ if not abiertos.empty:
             demorados[["ID VALE", "Receptor / Para Quien", "SECTOR", "dias", "FECHA HORA"]]
             .rename(columns={"ID VALE": "Vale", "Receptor / Para Quien": "Prestado a",
                              "SECTOR": "Sector", "dias": "Días", "FECHA HORA": "Desde"}),
-            hide_index=True, use_container_width=True,
+            hide_index=True, width="stretch",
         )
 
 # ───────────────────────────────────────────────── indicadores gráficos
@@ -98,7 +109,7 @@ with g1:
                  color_discrete_map=COLORES, title="Productos por categoría y estado",
                  labels={"categoria": "Categoría", "cantidad": "Productos", "estado": "Estado"})
     fig.update_layout(height=380, margin=dict(l=20, r=20, t=50, b=20))
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width="stretch")
 
 with g2:
     conteo = items["estado"].value_counts().reset_index()
@@ -106,7 +117,7 @@ with g2:
     fig2 = px.pie(conteo, names="estado", values="cantidad", hole=0.45,
                   color="estado", color_discrete_map=COLORES, title="Salud general del stock")
     fig2.update_layout(height=380, margin=dict(l=20, r=20, t=50, b=20))
-    st.plotly_chart(fig2, use_container_width=True)
+    st.plotly_chart(fig2, width="stretch")
 
 if not movimientos.empty:
     consumos = movimientos[movimientos["TIPO_MOV"] == "CONSUMO"]
@@ -118,4 +129,4 @@ if not movimientos.empty:
                       labels={"CANT": "Unidades", "DESCRIPCIÓN_ITEM": ""})
         fig3.update_layout(height=450, margin=dict(l=20, r=20, t=50, b=20),
                            yaxis=dict(autorange="reversed"))
-        st.plotly_chart(fig3, use_container_width=True)
+        st.plotly_chart(fig3, width="stretch")

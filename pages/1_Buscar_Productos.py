@@ -48,7 +48,7 @@ st.dataframe(
         "stock_actual": "Stock", "unidad": "Unidad", "stock_minimo": "Mínimo",
         "estado": "Estado", "categoria": "Categoría", "subcategoria": "Subcategoría",
     }),
-    hide_index=True, use_container_width=True, height=420,
+    hide_index=True, width="stretch", height=420,
 )
 
 st.divider()
@@ -81,7 +81,7 @@ elif est in estanterias.index:
                 vecinos[["descripcion", "ubicacion", "stock_actual", "unidad", "estado"]]
                 .rename(columns={"descripcion": "Producto", "ubicacion": "Ubicación",
                                  "stock_actual": "Stock", "unidad": "Unidad", "estado": "Estado"}),
-                hide_index=True, use_container_width=True,
+                hide_index=True, width="stretch",
             )
 else:
     st.info(f"📍 Ubicación: {item['ubicacion']}")

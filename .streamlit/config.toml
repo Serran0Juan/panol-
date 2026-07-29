@@ -1,0 +1,22 @@
+# Paleta del sistema. El CSS fino está en estilo.py.
+
+[theme]
+base = "light"
+primaryColor = "#14507E"
+backgroundColor = "#F5F7FA"
+secondaryBackgroundColor = "#FFFFFF"
+textColor = "#0F172A"
+font = "sans-serif"
+
+[theme.sidebar]
+backgroundColor = "#0E2038"
+secondaryBackgroundColor = "#16304F"
+textColor = "#E6EDF7"
+primaryColor = "#6FA8DC"
+
+[client]
+toolbarMode = "minimal"
+
+[server]
+# al guardar un archivo, la app se actualiza sola
+runOnSave = true

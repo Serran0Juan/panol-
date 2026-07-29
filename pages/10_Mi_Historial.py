@@ -81,5 +81,5 @@ st.dataframe(
         "TIPO_MOV": "Tipo", "CANT": "Retirado", "CANT_DEVUELTA": "Devuelto",
         "pendiente": "Pendiente", "UNIDAD": "Unidad", "ESTADO_RENGLON": "Estado",
     }),
-    hide_index=True, use_container_width=True, height=380,
+    hide_index=True, width="stretch", height=380,
 )
