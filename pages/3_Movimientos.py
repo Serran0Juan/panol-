@@ -18,7 +18,9 @@ if not puede_gestionar(usuario):
     st.error("No tenés permiso para cargar movimientos. Consultá lo tuyo en **Mi historial**.")
     st.stop()
 
-st.title("🔄 Movimientos de stock")
+st.markdown("###### PAÑOL · MANTENIMIENTO")
+st.title("Registrar movimiento")
+st.caption("Entregas a operarios, devoluciones e ingresos de mercadería.")
 
 items = get_items()
 if items.empty:
@@ -33,8 +35,8 @@ if "carrito" not in st.session_state:
 
 ICONO = {"PRESTADO": "🔄", "CONSUMO": "✔️", "INGRESO": "📥"}
 
-tab_entrega, tab_ingreso, tab_pendientes, tab_historial = st.tabs(
-    ["➕ Nueva entrega", "📥 Ingreso de mercadería", "⏳ Pendientes", "📜 Historial"]
+tab_entrega, tab_ingreso, tab_pendientes = st.tabs(
+    ["➕ Nueva entrega", "📥 Ingreso de mercadería", "⏳ Pendientes"]
 )
 
 # ═══════════════════════════════════════════════ Nueva entrega
@@ -108,7 +110,8 @@ with tab_entrega:
 
         if st.button("✅ Registrar vale", type="primary",
                      disabled=bool(faltantes) or not receptor.strip()):
-            id_vale = registrar_vale(sector, area_sala, receptor.strip(), observaciones, carrito)
+            id_vale = registrar_vale(sector, area_sala, receptor.strip(), observaciones,
+                                     carrito, registrado_por=usuario["NOMBRE"])
             st.session_state["carrito"] = []
             st.success(f"Vale **{id_vale}** registrado con {len(carrito)} producto(s). "
                        "El stock se recalcula solo en la planilla.")
@@ -202,57 +205,3 @@ with tab_pendientes:
                                 convertir_a_consumo(rid)
                                 st.success("Marcado como consumo. El stock queda descontado.")
                                 st.rerun()
-
-# ═══════════════════════════════════════════════ Historial
-with tab_historial:
-    registro = get_registro()
-    if registro.empty:
-        st.info("Todavía no hay movimientos registrados.")
-    else:
-        f1, f2 = st.columns([1, 3])
-        with f1:
-            tipo_filtro = st.selectbox("Tipo", ["Todos"] + sorted(registro["TIPO_MOV"].unique()))
-        with f2:
-            busqueda = st.text_input("Buscar producto o vale", "")
-
-        vista = registro
-        if tipo_filtro != "Todos":
-            vista = vista[vista["TIPO_MOV"] == tipo_filtro]
-        if busqueda.strip():
-            q = busqueda.strip()
-            vista = vista[vista["DESCRIPCIÓN_ITEM"].str.contains(q, case=False, na=False)
-                          | vista["ID_VALE_REF"].str.contains(q, case=False, na=False)]
-
-        st.caption(f"{len(vista)} de {len(registro)} movimientos")
-        st.dataframe(
-            vista.sort_values("ID_REGISTRO", ascending=False)[
-                ["FECHA_VALE", "ID_VALE_REF", "TIPO_MOV", "DESCRIPCIÓN_ITEM", "CANT",
-                 "CANT_DEVUELTA", "pendiente", "UNIDAD", "ESTADO_RENGLON", "OBSERVACIONES"]
-            ].rename(columns={
-                "FECHA_VALE": "Fecha", "ID_VALE_REF": "Vale", "TIPO_MOV": "Tipo",
-                "DESCRIPCIÓN_ITEM": "Producto", "CANT": "Entregado",
-                "CANT_DEVUELTA": "Devuelto", "pendiente": "Pendiente", "UNIDAD": "Unidad",
-                "ESTADO_RENGLON": "Estado", "OBSERVACIONES": "Observaciones",
-            }),
-            hide_index=True, use_container_width=True, height=420,
-        )
-
-        with st.expander("↩️ Registrar la devolución de un sobrante"):
-            st.caption("Para cuando te traen de vuelta parte de algo que ya se había "
-                       "entregado como consumo.")
-            devolvibles = registro[(registro["CANT"] - registro["CANT_DEVUELTA"]) > 0]
-            if devolvibles.empty:
-                st.info("No hay renglones con cantidad pendiente de devolver.")
-            else:
-                op = {f"{r.ID_VALE_REF} · {r.DESCRIPCIÓN_ITEM} — quedan "
-                      f"{r.CANT - r.CANT_DEVUELTA:g} {r.UNIDAD}": r.ID_REGISTRO
-                      for r in devolvibles.itertuples()}
-                sel = st.selectbox("Renglón", list(op.keys()))
-                reng = registro[registro["ID_REGISTRO"] == op[sel]].iloc[0]
-                maximo = float(reng["CANT"] - reng["CANT_DEVUELTA"])
-                cant = st.number_input("Cantidad devuelta", min_value=0.01, max_value=maximo,
-                                       value=maximo, step=1.0)
-                if st.button("Registrar devolución", type="primary"):
-                    devolver_renglon(op[sel], cant)
-                    st.success("Devolución registrada. El stock se repone solo.")
-                    st.rerun()

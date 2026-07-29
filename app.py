@@ -1,11 +1,19 @@
-"""Pañol — app web: entrypoint, login y navegación por rol."""
+"""Sistema de Gestión Integral de Mantenimiento — entrypoint, login y navegación por rol."""
+
+from pathlib import Path
 
 import streamlit as st
 
 from auth import current_user, es_admin, login_widget, puede_gestionar
 from sheets_backend import usando_sheets_reales
 
-st.set_page_config(page_title="Pañol", page_icon="🧰", layout="wide")
+st.set_page_config(page_title="Sistema de Gestión Integral de Mantenimiento",
+                   page_icon="🧰", layout="wide")
+
+ASSETS = Path(__file__).parent / "assets"
+if (ASSETS / "logo_sidebar.png").exists():
+    st.logo(str(ASSETS / "logo_sidebar.png"), icon_image=str(ASSETS / "logo_chico.png"),
+            size="large")
 
 usuario = current_user()
 
@@ -13,28 +21,52 @@ if usuario is None:
     st.navigation([st.Page(login_widget, title="Iniciar sesión", icon="🔐")]).run()
     st.stop()
 
-paginas = [
-    st.Page("pages/1_Buscar_Productos.py", title="Buscar productos", icon="🔍"),
-    st.Page("pages/6_Plano.py", title="Plano del pañol", icon="🗺️"),
-    st.Page("pages/4_Reclamos.py", title="Pedidos y reclamos", icon="📢"),
-]
-if puede_gestionar(usuario):
-    paginas += [
-        st.Page("pages/3_Movimientos.py", title="Movimientos", icon="🔄"),
-        st.Page("pages/2_Dashboard.py", title="Dashboard", icon="📊"),
-        st.Page("pages/5_Inventario.py", title="Inventario", icon="📦"),
-        st.Page("pages/7_Ubicaciones.py", title="Asignar ubicaciones", icon="📍"),
-    ]
-if es_admin(usuario):
-    paginas.append(st.Page("pages/8_Usuarios.py", title="Usuarios", icon="👥"))
+gestiona = puede_gestionar(usuario)
+
+if gestiona:
+    paginas = {
+        "Pañol": [
+            st.Page("pages/0_Panel.py", title="Panel de control", icon="🏠", default=True),
+            st.Page("pages/1_Buscar_Productos.py", title="Buscar material", icon="🔍"),
+            st.Page("pages/6_Plano.py", title="Plano del pañol", icon="🗺️"),
+        ],
+        "Movimientos": [
+            st.Page("pages/3_Movimientos.py", title="Registrar movimiento", icon="➕"),
+            st.Page("pages/9_Historial.py", title="Historial", icon="📜"),
+            st.Page("pages/4_Reclamos.py", title="Pedidos y reclamos", icon="📢"),
+        ],
+        "Administración": [
+            st.Page("pages/5_Inventario.py", title="Inventario", icon="📦"),
+            st.Page("pages/7_Ubicaciones.py", title="Ubicaciones", icon="📍"),
+        ],
+    }
+    if es_admin(usuario):
+        paginas["Administración"].append(
+            st.Page("pages/11_Administracion.py", title="Configuración", icon="⚙️"))
+else:
+    paginas = {
+        "Pañol": [
+            st.Page("pages/1_Buscar_Productos.py", title="Buscar material", icon="🔍", default=True),
+            st.Page("pages/6_Plano.py", title="Plano del pañol", icon="🗺️"),
+        ],
+        "Lo mío": [
+            st.Page("pages/10_Mi_Historial.py", title="Mi historial", icon="📜"),
+            st.Page("pages/4_Reclamos.py", title="Pedidos y reclamos", icon="📢"),
+        ],
+    }
+
+# st.navigation tiene que ir antes de escribir cualquier otra cosa: si no,
+# Streamlit no llega a construir la barra lateral.
+navegacion = st.navigation(paginas)
 
 with st.sidebar:
+    st.divider()
     st.markdown(f"**{usuario['NOMBRE']}**")
     st.caption(f"{usuario['ROL']} · {usuario.get('SECTOR', '')}")
     if not usando_sheets_reales():
-        st.warning("Modo de prueba: trabajando sobre una copia local, no sobre la planilla real (ver SETUP.md).")
-    if st.button("Cerrar sesión"):
+        st.warning("Modo de prueba: copia local, no la planilla real (ver SETUP.md).")
+    if st.button("Cerrar sesión", use_container_width=True):
         st.session_state.pop("usuario", None)
         st.rerun()
 
-st.navigation(paginas).run()
+navegacion.run()

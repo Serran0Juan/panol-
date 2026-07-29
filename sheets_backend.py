@@ -57,7 +57,8 @@ INVENTARIO_ESCRIBIBLES = {"descripcion", "stock_inicial", "unidad", "ubicacion",
                           "precio_unitario", "categoria", "subcategoria"}
 
 COLS_VALES = ["ID VALE", "FECHA HORA", "TIPO MOVIMIENTO", "SECTOR", "ÁREA / SALA",
-              "Receptor / Para Quien", "OBSERVACIONES", "ESTADO VALE", "DIAS RETRASO"]
+              "Receptor / Para Quien", "OBSERVACIONES", "ESTADO VALE", "DIAS RETRASO",
+              "REGISTRADO_POR"]
 COLS_REGISTRO = ["ID_REGISTRO", "ID_VALE_REF", "ID_ITEM", "CANT", "UNIDAD", "TIPO_MOV",
                  "DESCRIPCIÓN_ITEM", "FECHA_VALE", "OBSERVACIONES", "ESTADO_VALE (auto)",
                  "CANT_DEVUELTA", "ESTADO_RENGLON"]
@@ -375,6 +376,28 @@ def get_registro() -> pd.DataFrame:
     return df.reset_index(drop=True)
 
 
+@st.cache_data(ttl=15, show_spinner=False)
+def get_movimientos() -> pd.DataFrame:
+    """Renglones de Registro APP enriquecidos con los datos de su vale.
+
+    Es la vista que usan el panel, el historial y el historial del operario.
+    """
+    reg = get_registro()
+    if reg.empty:
+        return reg
+
+    vales = get_vales()
+    if vales.empty:
+        for c in ["SECTOR", "ÁREA / SALA", "Receptor / Para Quien", "REGISTRADO_POR"]:
+            reg[c] = ""
+        return reg
+
+    columnas = ["ID VALE", "SECTOR", "ÁREA / SALA", "Receptor / Para Quien", "REGISTRADO_POR"]
+    df = reg.merge(vales[columnas], left_on="ID_VALE_REF", right_on="ID VALE", how="left")
+    return df.fillna({"SECTOR": "", "ÁREA / SALA": "", "Receptor / Para Quien": "",
+                      "REGISTRADO_POR": ""})
+
+
 def dias_desde(fecha_texto: str) -> int:
     """Días transcurridos desde una fecha de vale. -1 si no se puede interpretar."""
     for formato in ("%Y-%m-%d %H:%M:%S", "%d/%m/%Y %H:%M:%S", "%d/%m/%Y %H:%M", "%d/%m/%Y", "%Y-%m-%d"):
@@ -401,7 +424,7 @@ def _siguiente_id_registro() -> int:
     return int(nums.max()) + 1 if len(nums) else 1
 
 
-def registrar_vale(sector, area_sala, receptor, observaciones, renglones):
+def registrar_vale(sector, area_sala, receptor, observaciones, renglones, registrado_por=""):
     """Crea un vale (una entrega a un operario) con uno o más renglones.
 
     Cada renglón lleva su propio tipo: un mismo vale puede tener una herramienta
@@ -427,6 +450,7 @@ def registrar_vale(sector, area_sala, receptor, observaciones, renglones):
         "ID VALE": id_vale, "FECHA HORA": ahora, "TIPO MOVIMIENTO": tipo_vale,
         "SECTOR": sector, "ÁREA / SALA": area_sala, "Receptor / Para Quien": receptor,
         "OBSERVACIONES": observaciones, "ESTADO VALE": estado_vale, "DIAS RETRASO": "",
+        "REGISTRADO_POR": registrado_por,
     }, COLS_VALES)
 
     id_reg = _siguiente_id_registro()
@@ -563,6 +587,7 @@ def registrar_ingreso(item_id, cantidad, observaciones, responsable):
         "ID VALE": id_vale, "FECHA HORA": ahora, "TIPO MOVIMIENTO": "INGRESO",
         "SECTOR": "", "ÁREA / SALA": "", "Receptor / Para Quien": responsable,
         "OBSERVACIONES": observaciones, "ESTADO VALE": "CERRADO", "DIAS RETRASO": "",
+        "REGISTRADO_POR": responsable,
     }, COLS_VALES)
     _agregar_fila(HOJA_REGISTRO, {
         "ID_REGISTRO": _siguiente_id_registro(), "ID_VALE_REF": id_vale,

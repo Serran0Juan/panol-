@@ -12,7 +12,9 @@ if not puede_gestionar(usuario):
     st.error("No tenés permiso para ver esta sección.")
     st.stop()
 
-st.title("📦 Inventario")
+st.markdown("###### PAÑOL · MANTENIMIENTO")
+st.title("Inventario")
+st.caption("Existencias, ubicación y estado de cada material.")
 
 items = get_items()
 parametros = get_parametros()
@@ -20,33 +22,39 @@ unidades = parametros.get("UNIDAD", []) or ["un"]
 categorias_param = parametros.get("CATEGORIA", [])
 estanterias = get_estanterias()
 
-tab_editar, tab_nuevo = st.tabs(["✏️ Editar productos", "➕ Nuevo producto"])
+tab_editar, tab_nuevo, tab_valor = st.tabs(
+    ["📋 Materiales", "➕ Nuevo material", "💲 Valorización"])
 
 with tab_editar:
     if items.empty:
         st.info("No hay productos cargados.")
     else:
-        c1, c2 = st.columns([2, 1])
+        c1, c2, c3 = st.columns([2, 1, 1])
         with c1:
-            q = st.text_input("Buscar", "")
+            q = st.text_input("Buscar", "", placeholder="nombre o ubicación...")
         with c2:
             cat = st.selectbox("Categoría", ["Todas"] + sorted(c for c in items["categoria"].unique() if c))
+        with c3:
+            est = st.selectbox("Estado", ["Todos", "🟢 OK", "🟡 Mínimo", "🔴 Sin stock"])
 
         filtrado = items
         if q.strip():
-            filtrado = filtrado[filtrado["descripcion"].str.contains(q.strip(), case=False, na=False)]
+            t = q.strip()
+            filtrado = filtrado[filtrado["descripcion"].str.contains(t, case=False, na=False)
+                                | filtrado["ubicacion"].str.contains(t, case=False, na=False)]
         if cat != "Todas":
             filtrado = filtrado[filtrado["categoria"] == cat]
+        if est != "Todos":
+            filtrado = filtrado[filtrado["estado"] == est]
 
-        st.caption(f"{len(filtrado)} productos")
+        st.caption(f"{len(filtrado)} materiales encontrados")
         st.dataframe(
             filtrado[["id", "descripcion", "categoria", "ubicacion", "stock_actual",
-                      "stock_minimo", "unidad", "precio_unitario", "estado"]]
-            .rename(columns={"id": "N°", "descripcion": "Producto", "categoria": "Categoría",
+                      "unidad", "stock_minimo", "estado"]]
+            .rename(columns={"id": "N°", "descripcion": "Descripción", "categoria": "Categoría",
                              "ubicacion": "Ubicación", "stock_actual": "Stock",
-                             "stock_minimo": "Mínimo", "unidad": "Unidad",
-                             "precio_unitario": "Precio", "estado": "Estado"}),
-            hide_index=True, use_container_width=True, height=320,
+                             "unidad": "Unidad", "stock_minimo": "Mínimo", "estado": "Estado"}),
+            hide_index=True, use_container_width=True, height=380,
         )
 
         if not filtrado.empty:
@@ -111,3 +119,48 @@ with tab_nuevo:
                 nuevo_id = add_item(descripcion.strip(), categoria, subcategoria.strip(),
                                     unidad, ubicacion, stock_minimo, stock_actual, precio)
                 st.success(f"Producto agregado con el N° {nuevo_id}.")
+
+# ═══════════════════════════════════════════════ Valorización
+with tab_valor:
+    if items.empty:
+        st.info("No hay productos cargados.")
+    else:
+        st.caption("Precios unitarios y cuánto vale el stock que hay hoy en el pañol.")
+
+        con_precio = items[items["precio_unitario"] > 0]
+        v1, v2, v3 = st.columns(3)
+        v1.metric("Valor total del inventario",
+                  f"${items['valor'].sum():,.0f}".replace(",", "."))
+        v2.metric("Materiales con precio cargado", f"{len(con_precio)} de {len(items)}")
+        faltante = items[items["stock_actual"] <= 0]
+        costo_reposicion = (faltante["stock_minimo"] * faltante["precio_unitario"]).sum()
+        v3.metric("Costo de reponer lo agotado",
+                  f"${costo_reposicion:,.0f}".replace(",", "."),
+                  help="Lo que costaría llevar al mínimo todo lo que está sin stock.")
+
+        por_cat = (items.groupby("categoria", as_index=False)["valor"].sum()
+                   .sort_values("valor", ascending=False))
+        st.dataframe(
+            por_cat.rename(columns={"categoria": "Categoría", "valor": "Valor del stock ($)"}),
+            hide_index=True, use_container_width=True,
+        )
+
+        st.subheader("Detalle por material")
+        orden = st.selectbox("Ordenar por", ["Mayor valor en stock", "Mayor precio unitario",
+                                             "Sin precio cargado"])
+        detalle = items.copy()
+        if orden == "Mayor valor en stock":
+            detalle = detalle.sort_values("valor", ascending=False)
+        elif orden == "Mayor precio unitario":
+            detalle = detalle.sort_values("precio_unitario", ascending=False)
+        else:
+            detalle = detalle[detalle["precio_unitario"] <= 0].sort_values("descripcion")
+
+        st.dataframe(
+            detalle[["id", "descripcion", "categoria", "stock_actual", "unidad",
+                     "precio_unitario", "valor"]]
+            .rename(columns={"id": "N°", "descripcion": "Descripción", "categoria": "Categoría",
+                             "stock_actual": "Stock", "unidad": "Unidad",
+                             "precio_unitario": "Precio unit. ($)", "valor": "Valor ($)"}),
+            hide_index=True, use_container_width=True, height=380,
+        )
