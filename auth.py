@@ -94,7 +94,9 @@ def es_admin(usuario=None) -> bool:
 
 
 def login_widget():
-    st.title("🧰 Pañol · Iniciar sesión")
+    st.markdown("###### SISTEMA DE GESTIÓN INTEGRAL DE MANTENIMIENTO")
+    st.title("Iniciar sesión")
+    st.caption("Elegí tu usuario y entrá con tu contraseña.")
 
     usuarios = get_usuarios_activos()
     if not usuarios:

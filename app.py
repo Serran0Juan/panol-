@@ -9,7 +9,7 @@ from auth import current_user, login_widget, puede
 from sheets_backend import usando_sheets_reales
 
 st.set_page_config(page_title="Sistema de Gestión Integral de Mantenimiento",
-                   page_icon="🧰", layout="wide")
+                   page_icon="⚙️", layout="wide")
 estilo.aplicar()
 
 ASSETS = Path(__file__).parent / "assets"
@@ -51,7 +51,7 @@ if puede("ver_gestion"):
             st.Page("pages/6_Plano.py", title="Plano del pañol", icon="🗺️"),
         ],
         "Movimientos": movimientos,
-        "Mantenimiento": mantenimiento,
+        "Correctivo": mantenimiento,
         "Inventario": [
             st.Page("pages/5_Inventario.py", title="Materiales", icon="📦"),
             st.Page("pages/7_Ubicaciones.py", title="Ubicaciones", icon="📍"),
@@ -66,7 +66,7 @@ else:
             st.Page("pages/1_Buscar_Productos.py", title="Buscar material", icon="🔍", default=True),
             st.Page("pages/6_Plano.py", title="Plano del pañol", icon="🗺️"),
         ],
-        "Mantenimiento": [
+        "Correctivo": [
             st.Page("pages/12_Solicitudes.py", title="Solicitudes", icon="📝"),
             st.Page("pages/14_Mis_Ordenes.py", title="Mis órdenes", icon="🧰"),
         ],
