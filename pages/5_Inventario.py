@@ -53,11 +53,14 @@ with tab_editar:
 
         st.caption(f"{len(filtrado)} materiales encontrados")
         st.dataframe(
-            filtrado[["id", "descripcion", "categoria", "ubicacion", "stock_actual",
-                      "unidad", "stock_minimo", "estado"]]
+            filtrado[["id", "descripcion", "categoria", "subcategoria", "ubicacion",
+                      "stock_actual", "unidad", "stock_minimo", "estado",
+                      "fuente_requerimiento"]]
             .rename(columns={"id": "N°", "descripcion": "Descripción", "categoria": "Categoría",
-                             "ubicacion": "Ubicación", "stock_actual": "Stock",
-                             "unidad": "Unidad", "stock_minimo": "Mínimo", "estado": "Estado"}),
+                             "subcategoria": "Subcategoría", "ubicacion": "Ubicación",
+                             "stock_actual": "Stock", "unidad": "Unidad",
+                             "stock_minimo": "Mínimo", "estado": "Estado",
+                             "fuente_requerimiento": "Requerimiento"}),
             hide_index=True, width="stretch", height=380,
         )
 
@@ -78,6 +81,9 @@ with tab_editar:
                     subcategoria = st.text_input("Subcategoría", item["subcategoria"])
                     ubicacion = st.text_input("Ubicación", item["ubicacion"],
                                               help="Número de estantería, ej. 18 o 18-2 (estantería-nivel)")
+                    fuente = st.text_input("Fuente del requerimiento",
+                                           item["fuente_requerimiento"],
+                                           placeholder="ej. REQ-748835/2026")
                 with e2:
                     unidad = st.text_input("Unidad", item["unidad"])
                     stock_inicial = st.number_input(
@@ -97,7 +103,7 @@ with tab_editar:
                     update_item(int(item["id"]), descripcion=descripcion, categoria=categoria,
                                 subcategoria=subcategoria, ubicacion=ubicacion, unidad=unidad,
                                 stock_inicial=stock_inicial, stock_minimo=stock_minimo,
-                                precio_unitario=precio)
+                                precio_unitario=precio, fuente_requerimiento=fuente)
                     st.success("Producto actualizado en la planilla.")
                     st.rerun()
 

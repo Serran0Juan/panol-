@@ -47,6 +47,7 @@ COLS_INVENTARIO = {
     "total": "Total",
     "categoria": "Categoria/Area",
     "subcategoria": "Subcategoria",
+    "fuente_requerimiento": "Fuente del requerimiento",
 }
 # Columnas de "Inventario" que la app puede escribir.
 # OJO: "stock_actual" NO está y no debe estar. En la planilla es una fórmula
@@ -54,7 +55,7 @@ COLS_INVENTARIO = {
 # de "Registro APP". Si la app escribiera ahí, pisaría la fórmula y rompería el
 # cálculo automático de ese producto.
 INVENTARIO_ESCRIBIBLES = {"descripcion", "stock_inicial", "unidad", "ubicacion", "stock_minimo",
-                          "precio_unitario", "categoria", "subcategoria"}
+                          "precio_unitario", "categoria", "subcategoria", "fuente_requerimiento"}
 
 COLS_VALES = ["ID VALE", "FECHA HORA", "TIPO MOVIMIENTO", "SECTOR", "ÁREA / SALA",
               "Receptor / Para Quien", "OBSERVACIONES", "ESTADO VALE", "DIAS RETRASO",
@@ -275,7 +276,8 @@ def get_items() -> pd.DataFrame:
         ).fillna(0)
     df["id"] = df["id"].astype(int)
 
-    for c in ["descripcion", "categoria", "subcategoria", "unidad", "ubicacion"]:
+    for c in ["descripcion", "categoria", "subcategoria", "unidad", "ubicacion",
+              "fuente_requerimiento"]:
         df[c] = df[c].astype(str).str.strip()
 
     df["estado"] = [_estado(a, m) for a, m in zip(df["stock_actual"], df["stock_minimo"])]
