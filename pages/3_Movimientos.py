@@ -6,7 +6,7 @@ misma entrega puede tener una herramienta prestada y unos tornillos consumidos.
 
 import streamlit as st
 
-from auth import current_user, puede_gestionar
+from auth import current_user, exigir
 from sheets_backend import (DIAS_PARA_DEMORA, TIPOS_ENTREGA, cerrar_vale, convertir_a_consumo,
                             devolver_renglon, dias_desde, get_items, get_parametros,
                             get_registro, get_vales, registrar_ingreso, registrar_vale)
@@ -14,9 +14,8 @@ from sheets_backend import (DIAS_PARA_DEMORA, TIPOS_ENTREGA, cerrar_vale, conver
 usuario = current_user()
 if usuario is None:
     st.stop()
-if not puede_gestionar(usuario):
-    st.error("No tenés permiso para cargar movimientos. Consultá lo tuyo en **Mi historial**.")
-    st.stop()
+exigir("registrar_movimiento",
+       "No tenés permiso para registrar movimientos. Podés consultar el **Historial**.")
 
 st.markdown("###### PAÑOL · MANTENIMIENTO")
 st.title("Registrar movimiento")

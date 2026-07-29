@@ -3,16 +3,14 @@
 import pandas as pd
 import streamlit as st
 
-from auth import current_user, es_admin
+from auth import DESCRIPCION_ROLES, PERMISOS, ROLES, current_user, exigir
 from sheets_backend import (add_usuario, get_estanterias, get_items, get_parametros,
                             get_usuarios, set_password_hash, set_usuario_activo)
 
 usuario = current_user()
 if usuario is None:
     st.stop()
-if not es_admin(usuario):
-    st.error("Solo un ADMIN puede entrar a esta sección.")
-    st.stop()
+exigir("administrar", "Solo un ADMIN puede entrar a esta sección.")
 
 st.markdown("###### PAÑOL · MANTENIMIENTO")
 st.title("Administración")
@@ -23,7 +21,6 @@ estanterias = get_estanterias()
 parametros = get_parametros()
 usuarios = get_usuarios()
 
-ROLES = ["ADMIN", "JEFE", "COORDINADOR", "OPERARIO"]
 sectores = parametros.get("SECTOR", []) or ["MANTENIMIENTO"]
 
 # ───────────────────────────────────────────── resumen
@@ -99,7 +96,8 @@ with tab_usuarios:
             nombre = st.text_input("Nombre y apellido *",
                                    help="Tiene que coincidir con el nombre que se usa "
                                         "al cargar los vales, para que le aparezca en Mi historial.")
-            rol = st.selectbox("Rol", ROLES, index=ROLES.index("OPERARIO"))
+            rol = st.selectbox("Rol", ROLES, index=ROLES.index("OPERARIO"),
+                               format_func=lambda r: f"{r} — {DESCRIPCION_ROLES[r]}")
             sector = st.selectbox("Sector", sectores)
             st.caption("No hace falta asignarle contraseña: la elige la primera vez que entra.")
 
@@ -118,24 +116,33 @@ with tab_usuarios:
 # ───────────────────────────────────────────── permisos
 with tab_permisos:
     st.subheader("Qué puede hacer cada perfil")
-    matriz = pd.DataFrame([
-        {"Perfil": "OPERARIO", "Consultar stock": "✅", "Ver el plano": "✅",
-         "Pedir material": "✅", "Registrar movimientos": "—",
-         "Ver historial completo": "—", "Editar inventario": "—", "Administrar": "—"},
-        {"Perfil": "COORDINADOR", "Consultar stock": "✅", "Ver el plano": "✅",
-         "Pedir material": "✅", "Registrar movimientos": "✅",
-         "Ver historial completo": "✅", "Editar inventario": "✅", "Administrar": "—"},
-        {"Perfil": "JEFE", "Consultar stock": "✅", "Ver el plano": "✅",
-         "Pedir material": "✅", "Registrar movimientos": "✅",
-         "Ver historial completo": "✅", "Editar inventario": "✅", "Administrar": "—"},
-        {"Perfil": "ADMIN", "Consultar stock": "✅", "Ver el plano": "✅",
-         "Pedir material": "✅", "Registrar movimientos": "✅",
-         "Ver historial completo": "✅", "Editar inventario": "✅", "Administrar": "✅"},
-    ])
-    st.dataframe(matriz, hide_index=True, use_container_width=True)
-    st.info("Hoy **JEFE y COORDINADOR tienen exactamente los mismos permisos**. "
-            "Si querés diferenciarlos (por ejemplo, que solo el jefe apruebe préstamos "
-            "de herramientas caras), avisame y lo separamos.")
+    st.caption("La app se maneja con estos permisos: lo que no está marcado, no se puede.")
+
+    ACCIONES = [
+        ("Consultar stock y plano", None),
+        ("Pedir material", None),
+        ("Ver el sistema completo", "ver_gestion"),
+        ("Registrar movimientos", "registrar_movimiento"),
+        ("Editar inventario y ubicaciones", "editar_inventario"),
+        ("Resolver pedidos", "resolver_reclamos"),
+        ("Administrar usuarios", "administrar"),
+    ]
+
+    filas = []
+    for rol in ROLES:
+        fila = {"Perfil": rol}
+        for etiqueta, permiso in ACCIONES:
+            fila[etiqueta] = "✅" if permiso is None or permiso in PERMISOS[rol] else "—"
+        filas.append(fila)
+    st.dataframe(pd.DataFrame(filas), hide_index=True, use_container_width=True)
+
+    st.subheader("Para qué sirve cada perfil")
+    for rol, texto in DESCRIPCION_ROLES.items():
+        st.markdown(f"- **{rol}** — {texto}")
+
+    st.info("**JEFE y COORDINADOR** ven todo el sistema y registran movimientos, "
+            "pero no modifican el inventario ni la configuración. "
+            "**LECTOR** ve todo sin poder tocar nada.")
 
 # ───────────────────────────────────────────── catálogo
 with tab_catalogo:

@@ -2,15 +2,15 @@
 
 import streamlit as st
 
-from auth import current_user, puede_gestionar
+from auth import current_user, exigir, puede
 from sheets_backend import add_item, get_estanterias, get_items, get_parametros, update_item
 
 usuario = current_user()
 if usuario is None:
     st.stop()
-if not puede_gestionar(usuario):
-    st.error("No tenés permiso para ver esta sección.")
-    st.stop()
+exigir("ver_gestion")
+
+puede_editar = puede("editar_inventario")
 
 st.markdown("###### PAÑOL · MANTENIMIENTO")
 st.title("Inventario")
@@ -22,8 +22,12 @@ unidades = parametros.get("UNIDAD", []) or ["un"]
 categorias_param = parametros.get("CATEGORIA", [])
 estanterias = get_estanterias()
 
-tab_editar, tab_nuevo, tab_valor = st.tabs(
-    ["📋 Materiales", "➕ Nuevo material", "💲 Valorización"])
+if puede_editar:
+    tab_editar, tab_nuevo, tab_valor = st.tabs(
+        ["📋 Materiales", "➕ Nuevo material", "💲 Valorización"])
+else:
+    tab_editar, tab_valor = st.tabs(["📋 Materiales", "💲 Valorización"])
+    tab_nuevo = st.empty()  # marcador de posición: sin permiso no se dibuja el alta
 
 with tab_editar:
     if items.empty:
@@ -57,7 +61,11 @@ with tab_editar:
             hide_index=True, use_container_width=True, height=380,
         )
 
-        if not filtrado.empty:
+        if not puede_editar:
+            st.caption("Tenés acceso de solo lectura: podés consultar el inventario "
+                       "pero no modificarlo.")
+
+        if puede_editar and not filtrado.empty:
             opciones = {f"{r.descripcion} (N° {r.id})": r.id for r in filtrado.itertuples()}
             elegido = st.selectbox("Producto a editar", list(opciones.keys()))
             item = items[items["id"] == opciones[elegido]].iloc[0]
@@ -96,7 +104,8 @@ with tab_editar:
             st.caption("Los productos no se eliminan desde la app para no romper el historial de vales. "
                        "Si hace falta dar de baja uno, hacelo directamente en la planilla.")
 
-with tab_nuevo:
+def formulario_nuevo_material():
+    """Alta de un material. Solo se dibuja si el usuario puede editar el inventario."""
     with st.form("nuevo_item", clear_on_submit=True):
         n1, n2 = st.columns(2)
         with n1:
@@ -119,6 +128,11 @@ with tab_nuevo:
                 nuevo_id = add_item(descripcion.strip(), categoria, subcategoria.strip(),
                                     unidad, ubicacion, stock_minimo, stock_actual, precio)
                 st.success(f"Producto agregado con el N° {nuevo_id}.")
+
+
+if puede_editar:
+    with tab_nuevo:
+        formulario_nuevo_material()
 
 # ═══════════════════════════════════════════════ Valorización
 with tab_valor:

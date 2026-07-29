@@ -2,7 +2,7 @@
 
 import streamlit as st
 
-from auth import current_user, puede_gestionar
+from auth import current_user, puede
 from sheets_backend import add_reclamo, get_items, get_reclamos, responder_reclamo
 
 usuario = current_user()
@@ -56,7 +56,7 @@ with tab_todos:
     reclamos = get_reclamos()
     if reclamos.empty:
         st.info("No hay pedidos cargados.")
-    elif not puede_gestionar(usuario):
+    elif not puede("resolver_reclamos"):
         st.dataframe(
             reclamos[["FECHA_HORA", "TIPO", "PRODUCTO", "DETALLE", "NOMBRE", "ESTADO"]]
             .rename(columns={"FECHA_HORA": "Fecha", "TIPO": "Tipo", "PRODUCTO": "Producto",

@@ -2,15 +2,13 @@
 
 import streamlit as st
 
-from auth import current_user, puede_gestionar
+from auth import current_user, exigir, puede
 from sheets_backend import get_estanterias, get_items, numero_estanteria, update_item
 
 usuario = current_user()
 if usuario is None:
     st.stop()
-if not puede_gestionar(usuario):
-    st.error("No tenés permiso para ver esta sección.")
-    st.stop()
+exigir("ver_gestion")
 
 st.title("📍 Asignar ubicaciones")
 
@@ -29,6 +27,11 @@ c1.metric("Productos totales", len(items))
 c2.metric("Con ubicación ✅", len(con_ubicacion))
 c3.metric("Sin ubicación ⏳", len(sin_ubicacion))
 st.progress(len(con_ubicacion) / len(items) if len(items) else 0)
+
+if not puede("editar_inventario"):
+    st.info("Tenés acceso de solo lectura: podés ver el avance de la carga de "
+            "ubicaciones, pero no modificarlas.")
+    st.stop()
 
 st.caption("Consejo: filtrá por categoría o buscá un grupo de productos parecidos "
            "(ej. 'termofusion') y asignalos todos juntos a la misma estantería.")

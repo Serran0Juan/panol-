@@ -16,8 +16,32 @@ import streamlit as st
 
 from sheets_backend import get_usuarios_activos, set_password_hash
 
-ROLES_GESTION = ("ADMIN", "JEFE", "COORDINADOR")
 ITERACIONES = 200_000
+
+# Qué puede hacer cada rol. Todo lo que no esté acá, no se puede.
+#   ver_gestion         : entrar a panel, historial, inventario y ubicaciones (solo mirar)
+#   registrar_movimiento: cargar entregas, devoluciones e ingresos
+#   editar_inventario   : dar de alta y modificar materiales y sus ubicaciones
+#   resolver_reclamos   : responder y cerrar los pedidos de los operarios
+#   administrar         : usuarios, permisos y configuración
+PERMISOS = {
+    "ADMIN": {"ver_gestion", "registrar_movimiento", "editar_inventario",
+              "resolver_reclamos", "administrar"},
+    "JEFE": {"ver_gestion", "registrar_movimiento"},
+    "COORDINADOR": {"ver_gestion", "registrar_movimiento"},
+    "LECTOR": {"ver_gestion"},
+    "OPERARIO": set(),
+}
+
+ROLES = list(PERMISOS)
+
+DESCRIPCION_ROLES = {
+    "ADMIN": "Control total: configura el sistema y los usuarios.",
+    "JEFE": "Ve todo el sistema y registra movimientos.",
+    "COORDINADOR": "Ve todo el sistema y registra movimientos.",
+    "LECTOR": "Ve todo el sistema, sin modificar nada.",
+    "OPERARIO": "Consulta el stock, ve lo suyo y pide materiales.",
+}
 
 
 def hash_password(password: str, salt: bytes | None = None) -> str:
@@ -39,14 +63,30 @@ def current_user():
     return st.session_state.get("usuario")
 
 
-def puede_gestionar(usuario=None) -> bool:
+def puede(accion: str, usuario=None) -> bool:
+    """True si el usuario tiene ese permiso. Es la única fuente de verdad."""
     usuario = usuario or current_user()
-    return usuario is not None and usuario.get("ROL") in ROLES_GESTION
+    if usuario is None:
+        return False
+    return accion in PERMISOS.get(str(usuario.get("ROL", "")).upper(), set())
+
+
+def exigir(accion: str, mensaje: str = "No tenés permiso para ver esta sección."):
+    """Corta la página si el usuario no tiene el permiso pedido."""
+    import streamlit as st  # noqa: PLC0415  (evita el import circular al cargar el módulo)
+
+    if not puede(accion):
+        st.error(mensaje)
+        st.stop()
+
+
+def puede_gestionar(usuario=None) -> bool:
+    """Puede entrar a las secciones de gestión, aunque sea solo para mirar."""
+    return puede("ver_gestion", usuario)
 
 
 def es_admin(usuario=None) -> bool:
-    usuario = usuario or current_user()
-    return usuario is not None and usuario.get("ROL") == "ADMIN"
+    return puede("administrar", usuario)
 
 
 def login_widget():

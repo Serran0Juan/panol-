@@ -4,7 +4,7 @@ from pathlib import Path
 
 import streamlit as st
 
-from auth import current_user, es_admin, login_widget, puede_gestionar
+from auth import current_user, login_widget, puede
 from sheets_backend import usando_sheets_reales
 
 st.set_page_config(page_title="Sistema de Gestión Integral de Mantenimiento",
@@ -21,28 +21,31 @@ if usuario is None:
     st.navigation([st.Page(login_widget, title="Iniciar sesión", icon="🔐")]).run()
     st.stop()
 
-gestiona = puede_gestionar(usuario)
+if puede("ver_gestion"):
+    movimientos = []
+    if puede("registrar_movimiento"):
+        movimientos.append(
+            st.Page("pages/3_Movimientos.py", title="Registrar movimiento", icon="➕"))
+    movimientos += [
+        st.Page("pages/9_Historial.py", title="Historial", icon="📜"),
+        st.Page("pages/4_Reclamos.py", title="Pedidos y reclamos", icon="📢"),
+    ]
 
-if gestiona:
     paginas = {
         "Pañol": [
             st.Page("pages/0_Panel.py", title="Panel de control", icon="🏠", default=True),
             st.Page("pages/1_Buscar_Productos.py", title="Buscar material", icon="🔍"),
             st.Page("pages/6_Plano.py", title="Plano del pañol", icon="🗺️"),
         ],
-        "Movimientos": [
-            st.Page("pages/3_Movimientos.py", title="Registrar movimiento", icon="➕"),
-            st.Page("pages/9_Historial.py", title="Historial", icon="📜"),
-            st.Page("pages/4_Reclamos.py", title="Pedidos y reclamos", icon="📢"),
-        ],
-        "Administración": [
-            st.Page("pages/5_Inventario.py", title="Inventario", icon="📦"),
+        "Movimientos": movimientos,
+        "Inventario": [
+            st.Page("pages/5_Inventario.py", title="Materiales", icon="📦"),
             st.Page("pages/7_Ubicaciones.py", title="Ubicaciones", icon="📍"),
         ],
     }
-    if es_admin(usuario):
-        paginas["Administración"].append(
-            st.Page("pages/11_Administracion.py", title="Configuración", icon="⚙️"))
+    if puede("administrar"):
+        paginas["Administración"] = [
+            st.Page("pages/11_Administracion.py", title="Configuración", icon="⚙️")]
 else:
     paginas = {
         "Pañol": [

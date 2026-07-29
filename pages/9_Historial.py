@@ -2,15 +2,14 @@
 
 import streamlit as st
 
-from auth import current_user, puede_gestionar
+from auth import current_user, exigir, puede
 from sheets_backend import devolver_renglon, get_movimientos
 
 usuario = current_user()
 if usuario is None:
     st.stop()
-if not puede_gestionar(usuario):
-    st.error("No tenés permiso para ver esta sección. Consultá lo tuyo en **Mi historial**.")
-    st.stop()
+exigir("ver_gestion", "No tenés permiso para ver esta sección. "
+                      "Consultá lo tuyo en **Mi historial**.")
 
 st.markdown("###### PAÑOL · MANTENIMIENTO")
 st.title("Historial de movimientos")
@@ -60,6 +59,9 @@ st.dataframe(tabla, hide_index=True, use_container_width=True, height=480)
 
 st.download_button("⬇️ Descargar CSV", tabla.to_csv(index=False).encode("utf-8-sig"),
                    file_name="historial_panol.csv", mime="text/csv")
+
+if not puede("registrar_movimiento"):
+    st.stop()
 
 with st.expander("↩️ Registrar la devolución de un sobrante"):
     st.caption("Para cuando traen de vuelta parte de algo ya entregado.")
