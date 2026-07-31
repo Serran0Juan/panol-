@@ -2,6 +2,7 @@
 
 import streamlit as st
 
+import estilo
 from auth import current_user, exigir, puede
 from sheets_backend import devolver_renglon, get_movimientos
 
@@ -36,9 +37,9 @@ if estado != "Todos":
 if q.strip():
     t = q.strip()
     vista = vista[
-        vista["DESCRIPCIÓN_ITEM"].str.contains(t, case=False, na=False)
-        | vista["ID_VALE_REF"].str.contains(t, case=False, na=False)
-        | vista["Receptor / Para Quien"].astype(str).str.contains(t, case=False, na=False)
+        vista["DESCRIPCIÓN_ITEM"].str.contains(t, case=False, na=False, regex=False)
+        | vista["ID_VALE_REF"].str.contains(t, case=False, na=False, regex=False)
+        | vista["Receptor / Para Quien"].astype(str).str.contains(t, case=False, na=False, regex=False)
     ]
 
 st.caption(f"{len(vista)} de {len(movs)} registros")
@@ -55,15 +56,18 @@ tabla = vista.sort_values("ID_REGISTRO", ascending=False)[
     "ESTADO_RENGLON": "Estado", "OBSERVACIONES": "Observaciones",
 })
 
-st.dataframe(tabla, hide_index=True, width="stretch", height=480)
+st.dataframe(
+    estilo.tabla(tabla, {"Estado": estilo.COLORES_RENGLON,
+                         "Sector": estilo.COLORES_SECTOR}),
+    hide_index=True, width="stretch", height=480)
 
-st.download_button("⬇️ Descargar CSV", tabla.to_csv(index=False).encode("utf-8-sig"),
+st.download_button("Descargar CSV", tabla.to_csv(index=False).encode("utf-8-sig"),
                    file_name="historial_panol.csv", mime="text/csv")
 
 if not puede("registrar_movimiento"):
     st.stop()
 
-with st.expander("↩️ Registrar la devolución de un sobrante"):
+with st.expander("Registrar la devolución de un sobrante"):
     st.caption("Para cuando traen de vuelta parte de algo ya entregado.")
     devolvibles = movs[(movs["CANT"] - movs["CANT_DEVUELTA"]) > 0]
     if devolvibles.empty:

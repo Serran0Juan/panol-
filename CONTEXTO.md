@@ -136,7 +136,8 @@ permiso: lo puede hacer cualquier usuario.
 app.py                  entrypoint: login, logo y navegación por rol
 auth.py                 permisos y contraseñas
 sheets_backend.py       TODO el acceso a datos; las páginas no tocan gspread
-estilo.py               CSS y paleta
+estilo.py               CSS, paleta y los colores de cada familia de valores
+orden_impresa.py        la orden de trabajo en papel, para firmar
 pages/                  una pantalla por archivo
 assets/                 plano del pañol y logo
 ```
@@ -144,6 +145,43 @@ assets/                 plano del pañol y logo
 `sheets_backend.py` es la pieza central. Expone funciones de negocio
 (`registrar_vale`, `devolver_renglon`, `asignar_orden`...) y esconde si los
 datos vienen de Google Sheets o de la copia local.
+
+### Lenguaje visual
+
+**La app no usa emojis.** El trabajo que hacían lo hace el color, y el color
+está definido en un solo lugar: los mapas de `estilo.py`.
+
+| Familia | Mapa | Colores |
+|---|---|---|
+| Sector / área | `COLORES_SECTOR` | tareas varias verde, electricidad violeta, plomería azul, pintura naranja |
+| Semáforo del stock | `COLORES_STOCK` | OK verde, Mínimo ámbar, Sin stock rojo |
+| Estado de una orden | `COLORES_ESTADO_OT` | del gris al verde según avanza |
+| Prioridad | `COLORES_PRIORIDAD` | urgente rojo, alta ámbar, media azul, baja gris |
+| Estado de un renglón | `COLORES_RENGLON` | cerrado verde, pendiente ámbar |
+
+Cada entrada es una terna `(texto, fondo, gráfico)`. Las tres formas de usarla:
+
+- **Tablas**: `st.dataframe(estilo.tabla(df, {"Sector": estilo.COLORES_SECTOR}))`.
+  Siempre a través de `estilo.tabla()`: además de pintar las celdas, vuelve a
+  formatear los números, que Streamlit deja de hacer en cuanto recibe un Styler.
+  Las columnas con importes se pasan aparte —
+  `estilo.tabla(df, ..., moneda=["Precio unitario"])` — y salen como
+  `$1.050.000`, redondeadas al peso. Fuera de las tablas, `estilo.pesos()`.
+- **Etiquetas sueltas**: `estilo.etiqueta(valor, mapa)` y, para las órdenes,
+  `estilo.cabecera_orden(...)`, que las arma todas juntas.
+- **Gráficos**: `estilo.mapa_grafico(valores, mapa)` como `color_discrete_map`.
+
+Los indicadores son tarjetas propias (`estilo.indicador` + `fila_indicadores`),
+no `st.metric`: llevan una línea de contexto abajo, porque un número suelto no
+dice si está bien o mal, y una franja de color cuando son una alerta.
+
+En la barra lateral los nombres van en mayúsculas. Eso lo hace el CSS de
+`estilo.py`, no `app.py`: en el código los títulos se escriben normales.
+
+La única excepción a la regla de los emojis es la columna **Estado/Alerta** de
+la planilla, que sigue guardando 🟢🟡🔴 porque en Google Sheets no hay forma de
+pintar una celda según su valor. La app no lee esa columna: calcula el estado
+por su cuenta (`_estado()`).
 
 ### Modo local
 
@@ -154,7 +192,7 @@ podrían escribir en la planilla real.**
 
 ### Pruebas
 
-Cinco suites, 134 verificaciones, repetibles:
+Cinco suites, 143 verificaciones, repetibles:
 
 ```bash
 py -3 _prueba_numeros.py         # conversión de números formateados
@@ -210,6 +248,11 @@ Cosas que ya costaron un rato. Vale la pena leerlas antes de tocar.
    filtran por el nombre del usuario. Hay dos parecidos: "Serrano Juan" (admin)
    y "Juan Serrano" (operario).
 7. **Streamlit Cloud cachea.** Con archivos nuevos, hace falta Reboot.
+8. **El servidor de Streamlit Cloud corre en UTC**, no en hora argentina. Con
+   `dt.datetime.now()` un vale cargado a las 9 de la mañana quedaba registrado a
+   las 12. Toda fecha que se escriba o se compare tiene que salir de `ahora()`,
+   `ahora_texto()` u `hoy()` de `sheets_backend.py`. Los registros anteriores al
+   30/07/2026 quedaron guardados en UTC: están 3 horas adelantados.
 
 ---
 

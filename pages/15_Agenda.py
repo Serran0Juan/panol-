@@ -5,10 +5,10 @@ import datetime as dt
 import pandas as pd
 import streamlit as st
 
+import estilo
 from auth import current_user, exigir
-from sheets_backend import (ESTADOS_ABIERTOS, HORAS_JORNADA, ICONO_ESTADO_OT,
-                            carga_por_persona, get_ordenes, get_usuarios_activos,
-                            programar_orden)
+from sheets_backend import (ESTADOS_ABIERTOS, HORAS_JORNADA, carga_por_persona,
+                            get_ordenes, get_usuarios_activos, hoy, programar_orden)
 
 usuario = current_user()
 if usuario is None:
@@ -29,20 +29,23 @@ if abiertas.empty:
     st.success("No hay órdenes abiertas. Todo al día.")
     st.stop()
 
-hoy = dt.date.today()
-fin_semana = hoy + dt.timedelta(days=(6 - hoy.weekday()))
+dia_de_hoy = hoy()
+fin_semana = dia_de_hoy + dt.timedelta(days=(6 - dia_de_hoy.weekday()))
 
 vencidas = abiertas[abiertas["vencida"]]
-de_hoy = abiertas[abiertas["dia_programado"] == hoy]
+de_hoy = abiertas[abiertas["dia_programado"] == dia_de_hoy]
 de_semana = abiertas[abiertas["dia_programado"].apply(
-    lambda d: d is not None and hoy < d <= fin_semana)]
+    lambda d: d is not None and dia_de_hoy < d <= fin_semana)]
 sin_programar = abiertas[abiertas["dia_programado"].isna()]
 
-k1, k2, k3, k4 = st.columns(4)
-k1.metric("Vencidas ⏰", len(vencidas))
-k2.metric("Para hoy", len(de_hoy))
-k3.metric("Resto de la semana", len(de_semana))
-k4.metric("Sin programar", len(sin_programar))
+estilo.fila_indicadores([
+    estilo.indicador("Vencidas", len(vencidas), "pasaron su plazo",
+                     estilo.COLORES_PRIORIDAD["URGENTE"]),
+    estilo.indicador("Para hoy", len(de_hoy), "agendadas para el día"),
+    estilo.indicador("Resto de la semana", len(de_semana), "ya tienen fecha"),
+    estilo.indicador("Sin programar", len(sin_programar), "todavía sin fecha",
+                     estilo.COLORES_PRIORIDAD["ALTA"]),
+])
 
 st.divider()
 
@@ -58,10 +61,10 @@ def tarjeta(o, contexto, con_programar=True):
     with st.container(border=True):
         c1, c2 = st.columns([3, 1.4])
         with c1:
-            marca = " 🔴" if o["PRIORIDAD"] == "URGENTE" else ""
-            st.markdown(f"{ICONO_ESTADO_OT.get(o['ESTADO'], '•')} **{o['ID_OT']}** · "
-                        f"{o['AREA']} · {o['PRIORIDAD']}{marca}")
-            detalle = [o["ESTADO"]]
+            st.markdown(estilo.cabecera_orden(o["ID_OT"], o["AREA"], o["ESTADO"],
+                                              o["PRIORIDAD"]),
+                        unsafe_allow_html=True)
+            detalle = []
             if o["ASIGNADO_A"]:
                 detalle.append(o["ASIGNADO_A"])
             if o["SECTOR_ASIGNADO"]:
@@ -76,7 +79,7 @@ def tarjeta(o, contexto, con_programar=True):
             if d is not None and not pd.isna(d):
                 d = int(d)
                 if d < 0:
-                    st.error(f"⏰ Vencida hace {abs(d)} día(s) "
+                    st.error(f"Vencida hace {abs(d)} día(s) "
                              f"(era para el {o['FECHA_COMPROMISO']})")
                 elif d == 0:
                     st.warning("Vence hoy")
@@ -85,7 +88,7 @@ def tarjeta(o, contexto, con_programar=True):
 
         if con_programar:
             with c2:
-                actual = o["dia_programado"] or hoy
+                actual = o["dia_programado"] or dia_de_hoy
                 nueva = st.date_input("Programar para", value=actual,
                                       key=f"fecha_{clave}", format="DD/MM/YYYY")
                 horas = st.number_input("Horas estimadas", min_value=0.0, step=0.5,
@@ -103,11 +106,11 @@ def tarjeta(o, contexto, con_programar=True):
 
 
 tab_hoy, tab_semana, tab_pendientes, tab_carga = st.tabs(
-    ["📅 Hoy", "🗓️ Esta semana", "📥 Sin programar", "⚖️ Carga del equipo"])
+    ["Hoy", "Esta semana", "Sin programar", "Carga del equipo"])
 
 with tab_hoy:
     if not vencidas.empty:
-        st.subheader(f"⏰ Vencidas ({len(vencidas)})")
+        st.subheader(f"Vencidas ({len(vencidas)})")
         st.caption("Van primero: ya pasaron su fecha comprometida.")
         for _, o in vencidas.sort_values("dias_para_vencer").iterrows():
             tarjeta(o, "venc")
@@ -157,7 +160,7 @@ with tab_carga:
                 with c1:
                     st.markdown(f"**{p['persona']}**")
                     st.caption(f"{int(p['ordenes'])} orden(es) · {p['horas']:g} h estimadas"
-                               + (f" · ⏰ {int(p['vencidas'])} vencida(s)" if p["vencidas"] else ""))
+                               + (f" · {int(p['vencidas'])} vencida(s)" if p["vencidas"] else ""))
                     st.progress(min(float(p["capacidad"]), 1.0))
                 with c2:
                     pct = int(p["capacidad"] * 100)

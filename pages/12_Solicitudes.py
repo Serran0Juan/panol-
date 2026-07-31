@@ -3,7 +3,8 @@
 import streamlit as st
 
 from auth import current_user, puede
-from sheets_backend import ICONO_ESTADO_OT, PRIORIDADES, crear_solicitud, get_ordenes
+import estilo
+from sheets_backend import PRIORIDADES, crear_solicitud, get_ordenes
 
 usuario = current_user()
 if usuario is None:
@@ -17,7 +18,7 @@ st.caption("Para avisar que algo se rompió o no funciona. Cada solicitud abre u
 ordenes = get_ordenes()
 areas_previas = sorted(a for a in ordenes["AREA"].unique() if a) if not ordenes.empty else []
 
-tab_nueva, tab_mias = st.tabs(["➕ Nueva solicitud", "📋 Las mías"])
+tab_nueva, tab_mias = st.tabs(["Nueva solicitud", "Las mías"])
 
 # ═════════════════════════════════════════════════ nueva
 with tab_nueva:
@@ -67,8 +68,8 @@ with tab_mias:
     st.caption(f"{len(mias)} solicitud(es) tuyas")
     for _, o in mias.sort_values("ID_OT", ascending=False).iterrows():
         with st.container(border=True):
-            icono = ICONO_ESTADO_OT.get(o["ESTADO"], "•")
-            st.markdown(f"{icono} **{o['ID_OT']}** · {o['AREA']} · _{o['ESTADO']}_")
+            st.markdown(estilo.cabecera_orden(o["ID_OT"], o["AREA"], o["ESTADO"]),
+                        unsafe_allow_html=True)
             st.caption(f"{o['FECHA_ALTA']} · prioridad {o['PRIORIDAD']}"
                        + (f" · asignada a {o['ASIGNADO_A']}" if o["ASIGNADO_A"] else ""))
             st.write(o["DESCRIPCION"])

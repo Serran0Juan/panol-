@@ -95,5 +95,28 @@ o2 = sb.get_ordenes().set_index("ID_OT").loc[ot2]
 check("se puede anular", o2["ESTADO"] == "ANULADA")
 check("numeración correlativa", ot2 != ot, f"-> {ot} y {ot2}")
 
+print("\n7. La orden impresa")
+import orden_impresa  # noqa: E402  (se importa acá para no cargarlo si no se prueba)
+
+o3 = sb.get_ordenes().set_index("ID_OT", drop=False).loc[ot]
+papel = orden_impresa.orden_en_html(o3, "Serrano Juan", "2026-07-31 10:00:00")
+check("lleva el número de orden", ot in papel)
+check("lleva el problema", "No corta el agua la canilla del lavatorio" in papel)
+check("deja lugar para el trabajo hecho", "Trabajo realizado" in papel)
+check("deja lugar para los materiales", "Materiales utilizados" in papel)
+check("tiene la firma del operario", "Firma del operario" in papel)
+check("tiene la conformidad del responsable", "Conformidad del responsable" in papel)
+check("se abarca sola: no pide nada de afuera",
+      "http://" not in papel and "https://" not in papel)
+check("el nombre del archivo sale del número",
+      orden_impresa.nombre_archivo(o3) == f"orden-{ot.lower()}.html")
+
+# una descripción con < > no puede romper el HTML ni inyectar etiquetas
+peligrosa = dict(o3)
+peligrosa["DESCRIPCION"] = "<script>alert(1)</script> se rompió"
+sucia = orden_impresa.orden_en_html(peligrosa)
+check("escapa el HTML que venga de la planilla",
+      "<script>" not in sucia and "&lt;script&gt;" in sucia)
+
 print(f"\n{'=' * 48}\nRESULTADO: {ok} OK, {fallos} fallas\n{'=' * 48}")
 raise SystemExit(1 if fallos else 0)

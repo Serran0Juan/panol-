@@ -3,7 +3,9 @@
 import streamlit as st
 
 from auth import current_user, exigir, puede
-from sheets_backend import add_item, get_estanterias, get_items, get_parametros, update_item
+import estilo
+from sheets_backend import (ESTADOS_STOCK, add_item, get_estanterias, get_items,
+                            get_parametros, update_item)
 
 usuario = current_user()
 if usuario is None:
@@ -24,9 +26,9 @@ estanterias = get_estanterias()
 
 if puede_editar:
     tab_editar, tab_nuevo, tab_valor = st.tabs(
-        ["📋 Materiales", "➕ Nuevo material", "💲 Valorización"])
+        ["Materiales", "Nuevo material", "Valorización"])
 else:
-    tab_editar, tab_valor = st.tabs(["📋 Materiales", "💲 Valorización"])
+    tab_editar, tab_valor = st.tabs(["Materiales", "Valorización"])
     tab_nuevo = st.empty()  # marcador de posición: sin permiso no se dibuja el alta
 
 with tab_editar:
@@ -37,30 +39,34 @@ with tab_editar:
         with c1:
             q = st.text_input("Buscar", "", placeholder="nombre o ubicación...")
         with c2:
-            cat = st.selectbox("Categoría", ["Todas"] + sorted(c for c in items["categoria"].unique() if c))
+            cat = st.selectbox("Sector", ["Todas"] + sorted(c for c in items["categoria"].unique() if c))
         with c3:
-            est = st.selectbox("Estado", ["Todos", "🟢 OK", "🟡 Mínimo", "🔴 Sin stock"])
+            est = st.selectbox("Estado", ["Todos"] + ESTADOS_STOCK)
 
         filtrado = items
         if q.strip():
             t = q.strip()
-            filtrado = filtrado[filtrado["descripcion"].str.contains(t, case=False, na=False)
-                                | filtrado["ubicacion"].str.contains(t, case=False, na=False)]
+            filtrado = filtrado[
+                filtrado["descripcion"].str.contains(t, case=False, na=False, regex=False)
+                | filtrado["ubicacion"].str.contains(t, case=False, na=False, regex=False)]
         if cat != "Todas":
             filtrado = filtrado[filtrado["categoria"] == cat]
         if est != "Todos":
             filtrado = filtrado[filtrado["estado"] == est]
 
         st.caption(f"{len(filtrado)} materiales encontrados")
+        tabla = (filtrado[["id", "descripcion", "categoria", "subcategoria", "ubicacion",
+                           "stock_actual", "unidad", "stock_minimo", "estado",
+                           "fuente_requerimiento"]]
+                 .rename(columns={"id": "N°", "descripcion": "Descripción",
+                                  "categoria": "Sector", "subcategoria": "Subcategoría",
+                                  "ubicacion": "Ubicación", "stock_actual": "Stock",
+                                  "unidad": "Unidad", "stock_minimo": "Mínimo",
+                                  "estado": "Estado",
+                                  "fuente_requerimiento": "Requerimiento"}))
         st.dataframe(
-            filtrado[["id", "descripcion", "categoria", "subcategoria", "ubicacion",
-                      "stock_actual", "unidad", "stock_minimo", "estado",
-                      "fuente_requerimiento"]]
-            .rename(columns={"id": "N°", "descripcion": "Descripción", "categoria": "Categoría",
-                             "subcategoria": "Subcategoría", "ubicacion": "Ubicación",
-                             "stock_actual": "Stock", "unidad": "Unidad",
-                             "stock_minimo": "Mínimo", "estado": "Estado",
-                             "fuente_requerimiento": "Requerimiento"}),
+            estilo.tabla(tabla, {"Estado": estilo.COLORES_STOCK,
+                                 "Sector": estilo.COLORES_SECTOR}),
             hide_index=True, width="stretch", height=380,
         )
 
@@ -148,27 +154,49 @@ with tab_valor:
         st.caption("Precios unitarios y cuánto vale el stock que hay hoy en el pañol.")
 
         con_precio = items[items["precio_unitario"] > 0]
-        v1, v2, v3 = st.columns(3)
-        v1.metric("Valor total del inventario",
-                  f"${items['valor'].sum():,.0f}".replace(",", "."))
-        v2.metric("Materiales con precio cargado", f"{len(con_precio)} de {len(items)}")
+        sin_precio = items[items["precio_unitario"] <= 0]
+        cobertura = len(con_precio) / len(items) * 100
         faltante = items[items["stock_actual"] <= 0]
         costo_reposicion = (faltante["stock_minimo"] * faltante["precio_unitario"]).sum()
-        v3.metric("Costo de reponer lo agotado",
-                  f"${costo_reposicion:,.0f}".replace(",", "."),
-                  help="Lo que costaría llevar al mínimo todo lo que está sin stock.")
+
+        estilo.fila_indicadores([
+            estilo.indicador("Valor total del inventario", estilo.pesos(items["valor"].sum()),
+                             "sobre lo que tiene precio"),
+            estilo.indicador("Con precio cargado", len(con_precio),
+                             f"{cobertura:.0f}% del catálogo"),
+            estilo.indicador("Sin precio", len(sin_precio),
+                             "no suman al valor total",
+                             estilo.COLORES_STOCK["Mínimo"]),
+            estilo.indicador("Costo de reponer lo agotado", estilo.pesos(costo_reposicion),
+                             "llevar al mínimo lo que está en cero"),
+        ])
+
+        if len(sin_precio):
+            st.caption(f"El valor total está calculado sobre {len(con_precio)} materiales. "
+                       f"Los {len(sin_precio)} sin precio se cargan desde la pestaña "
+                       "**Materiales**, y hasta entonces cuentan como cero.")
 
         por_cat = (items.groupby("categoria", as_index=False)["valor"].sum()
-                   .sort_values("valor", ascending=False))
+                   .sort_values("valor", ascending=False)
+                   .rename(columns={"categoria": "Sector", "valor": "Valor del stock"}))
         st.dataframe(
-            por_cat.rename(columns={"categoria": "Categoría", "valor": "Valor del stock ($)"}),
+            estilo.tabla(por_cat, {"Sector": estilo.COLORES_SECTOR},
+                         moneda=["Valor del stock"]),
             hide_index=True, width="stretch",
         )
 
         st.subheader("Detalle por material")
-        orden = st.selectbox("Ordenar por", ["Mayor valor en stock", "Mayor precio unitario",
-                                             "Sin precio cargado"])
-        detalle = items.copy()
+        d1, d2 = st.columns([1, 1])
+        with d1:
+            orden = st.selectbox("Ordenar por", ["Mayor valor en stock", "Mayor precio unitario",
+                                                 "Sin precio cargado"])
+        with d2:
+            sector_val = st.selectbox(
+                "Sector", ["Todos"] + sorted(c for c in items["categoria"].unique() if c),
+                key="sector_valorizacion")
+
+        detalle = items if sector_val == "Todos" else items[items["categoria"] == sector_val]
+        detalle = detalle.copy()
         if orden == "Mayor valor en stock":
             detalle = detalle.sort_values("valor", ascending=False)
         elif orden == "Mayor precio unitario":
@@ -176,11 +204,16 @@ with tab_valor:
         else:
             detalle = detalle[detalle["precio_unitario"] <= 0].sort_values("descripcion")
 
+        st.caption(f"{len(detalle)} de {len(items)} materiales")
+        detalle_tabla = (detalle[["id", "descripcion", "categoria", "stock_actual", "unidad",
+                                  "precio_unitario", "valor"]]
+                         .rename(columns={"id": "N°", "descripcion": "Descripción",
+                                          "categoria": "Sector", "stock_actual": "Stock",
+                                          "unidad": "Unidad",
+                                          "precio_unitario": "Precio unitario",
+                                          "valor": "Valor en stock"}))
         st.dataframe(
-            detalle[["id", "descripcion", "categoria", "stock_actual", "unidad",
-                     "precio_unitario", "valor"]]
-            .rename(columns={"id": "N°", "descripcion": "Descripción", "categoria": "Categoría",
-                             "stock_actual": "Stock", "unidad": "Unidad",
-                             "precio_unitario": "Precio unit. ($)", "valor": "Valor ($)"}),
+            estilo.tabla(detalle_tabla, {"Sector": estilo.COLORES_SECTOR},
+                         moneda=["Precio unitario", "Valor en stock"]),
             hide_index=True, width="stretch", height=380,
         )

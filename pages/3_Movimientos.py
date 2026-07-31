@@ -32,10 +32,8 @@ sectores = parametros.get("SECTOR", []) or ["MANTENIMIENTO"]
 if "carrito" not in st.session_state:
     st.session_state["carrito"] = []
 
-ICONO = {"PRESTADO": "🔄", "CONSUMO": "✔️", "INGRESO": "📥"}
-
 tab_entrega, tab_ingreso, tab_pendientes = st.tabs(
-    ["➕ Nueva entrega", "📥 Ingreso de mercadería", "⏳ Pendientes"]
+    ["Nueva entrega", "Ingreso de mercadería", "Pendientes"]
 )
 
 # ═══════════════════════════════════════════════ Nueva entrega
@@ -74,7 +72,7 @@ with tab_entrega:
             })
             st.rerun()
 
-    detalle = [f"📍 {item['ubicacion']}" if item["ubicacion"] else "📍 sin ubicación",
+    detalle = [f"Ubicación {item['ubicacion']}" if item["ubicacion"] else "sin ubicación",
                item["estado"]]
     st.caption(" · ".join(detalle))
 
@@ -85,7 +83,7 @@ with tab_entrega:
         st.subheader("3. Productos del vale")
         for i, r in enumerate(carrito):
             col_a, col_b = st.columns([8, 1])
-            col_a.write(f"{ICONO[r['tipo']]} **{r['descripcion']}** — "
+            col_a.write(f"**{r['descripcion']}** — "
                         f"{r['cantidad']:g} {r['unidad']} · {r['tipo'].title()}")
             if col_b.button("Quitar", key=f"quitar_{i}"):
                 st.session_state["carrito"].pop(i)
@@ -107,7 +105,7 @@ with tab_entrega:
         if faltantes:
             st.error("No hay stock suficiente de: " + "; ".join(faltantes))
 
-        if st.button("✅ Registrar vale", type="primary",
+        if st.button("Registrar vale", type="primary",
                      disabled=bool(faltantes) or not receptor.strip()):
             id_vale = registrar_vale(sector, area_sala, receptor.strip(), observaciones,
                                      carrito, registrado_por=usuario["NOMBRE"])
@@ -165,7 +163,7 @@ with tab_pendientes:
                 cab1, cab2 = st.columns([4, 1])
                 titulo = f"**{id_vale}** · {v['Receptor / Para Quien']}"
                 if demorado:
-                    titulo += f" · ⏰ **{dias} días**"
+                    titulo += f" · **{dias} días**"
                 elif dias >= 0:
                     titulo += f" · hace {dias} día(s)"
                 cab1.markdown(titulo)
@@ -184,11 +182,11 @@ with tab_pendientes:
                     saldado = r["ESTADO_RENGLON"] != "PENDIENTE" and pend == 0
 
                     f1, f2, f3, f4 = st.columns([4, 1.3, 1.3, 1.6])
-                    etiqueta = (f"{ICONO.get(r['TIPO_MOV'], '•')} {r['DESCRIPCIÓN_ITEM']} — "
+                    etiqueta = (f"{r['DESCRIPCIÓN_ITEM']} — "
                                 f"{r['CANT']:g} {r['UNIDAD']}")
                     if r["CANT_DEVUELTA"] > 0:
                         etiqueta += f"  ·  devuelto {r['CANT_DEVUELTA']:g}"
-                    f1.write(etiqueta + ("  ✅" if saldado else ""))
+                    f1.write(etiqueta + ("  — saldado" if saldado else ""))
 
                     if pend > 0:
                         cant_dev = f2.number_input("Devolver", min_value=0.0, max_value=pend,

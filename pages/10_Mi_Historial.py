@@ -2,6 +2,7 @@
 
 import streamlit as st
 
+import estilo
 from auth import current_user
 from sheets_backend import DIAS_PARA_DEMORA, dias_desde, get_items, get_movimientos
 
@@ -33,13 +34,13 @@ pendientes = mios[(mios["ESTADO_RENGLON"] == "PENDIENTE") & (mios["pendiente"] >
 if pendientes.empty:
     st.success("No tenés nada pendiente de devolver.")
 else:
-    st.subheader(f"⚠️ Tenés {len(pendientes)} cosa(s) sin devolver")
+    st.subheader(f"Tenés {len(pendientes)} cosa(s) sin devolver")
     for _, r in pendientes.iterrows():
         dias = dias_desde(r["FECHA_VALE"])
         with st.container(border=True):
-            titulo = f"🔄 **{r['DESCRIPCIÓN_ITEM']}** — {r['pendiente']:g} {r['UNIDAD']}"
+            titulo = f"**{r['DESCRIPCIÓN_ITEM']}** — {r['pendiente']:g} {r['UNIDAD']}"
             if dias >= DIAS_PARA_DEMORA:
-                titulo += f"  ·  ⏰ **{dias} días**"
+                titulo += f"  ·  **{dias} días**"
             st.markdown(titulo)
 
             detalle = [f"Vale {r['ID_VALE_REF']}"]
@@ -48,7 +49,7 @@ else:
             try:
                 ubic = items.loc[int(r["ID_ITEM"]), "ubicacion"]
                 if str(ubic).strip():
-                    detalle.append(f"📍 {ubic}")
+                    detalle.append(f"Ubicación {ubic}")
             except (KeyError, ValueError):
                 pass
             st.caption(" · ".join(detalle))
@@ -69,17 +70,18 @@ vista = mios
 if tipo != "Todos":
     vista = vista[vista["TIPO_MOV"] == tipo]
 if q.strip():
-    vista = vista[vista["DESCRIPCIÓN_ITEM"].str.contains(q.strip(), case=False, na=False)]
+    vista = vista[vista["DESCRIPCIÓN_ITEM"].str.contains(q.strip(), case=False, na=False, regex=False)]
 
 st.caption(f"{len(vista)} de {len(mios)} movimientos")
+tabla = (vista.sort_values("ID_REGISTRO", ascending=False)[
+    ["FECHA_VALE", "ID_VALE_REF", "DESCRIPCIÓN_ITEM", "TIPO_MOV", "CANT",
+     "CANT_DEVUELTA", "pendiente", "UNIDAD", "ESTADO_RENGLON"]
+].rename(columns={
+    "FECHA_VALE": "Fecha", "ID_VALE_REF": "Vale", "DESCRIPCIÓN_ITEM": "Material",
+    "TIPO_MOV": "Tipo", "CANT": "Retirado", "CANT_DEVUELTA": "Devuelto",
+    "pendiente": "Pendiente", "UNIDAD": "Unidad", "ESTADO_RENGLON": "Estado",
+}))
 st.dataframe(
-    vista.sort_values("ID_REGISTRO", ascending=False)[
-        ["FECHA_VALE", "ID_VALE_REF", "DESCRIPCIÓN_ITEM", "TIPO_MOV", "CANT",
-         "CANT_DEVUELTA", "pendiente", "UNIDAD", "ESTADO_RENGLON"]
-    ].rename(columns={
-        "FECHA_VALE": "Fecha", "ID_VALE_REF": "Vale", "DESCRIPCIÓN_ITEM": "Material",
-        "TIPO_MOV": "Tipo", "CANT": "Retirado", "CANT_DEVUELTA": "Devuelto",
-        "pendiente": "Pendiente", "UNIDAD": "Unidad", "ESTADO_RENGLON": "Estado",
-    }),
+    estilo.tabla(tabla, {"Estado": estilo.COLORES_RENGLON}),
     hide_index=True, width="stretch", height=380,
 )

@@ -4,6 +4,10 @@ Las contraseñas nunca se guardan en texto plano: se guarda un "hash" (una huell
 irreversible) en la columna PASSWORD_HASH de la hoja Usuarios. Ni mirando la
 planilla se puede recuperar la contraseña original.
 
+La pantalla de inicio no muestra ninguna lista de usuarios: hay que saber el
+email. Y cuando algo no cierra el mensaje es siempre el mismo, así que desde
+afuera tampoco se puede averiguar qué emails existen.
+
 La primera vez que entra un usuario nuevo (sin hash cargado) la app le pide que
 elija su propia contraseña.
 """
@@ -11,12 +15,19 @@ elija su propia contraseña.
 import hashlib
 import hmac
 import os
+from pathlib import Path
 
 import streamlit as st
 
 from sheets_backend import get_usuarios_activos, set_password_hash
 
 ITERACIONES = 200_000
+
+ASSETS = Path(__file__).parent / "assets"
+
+# Un solo mensaje para "ese email no existe" y para "la contraseña está mal":
+# si fueran distintos, cualquiera podría ir probando emails hasta dar con uno.
+ERROR_LOGIN = "Email o contraseña incorrectos."
 
 # Qué puede hacer cada rol. Todo lo que no esté acá, no se puede.
 #   ver_gestion         : entrar a panel, historial, inventario y ubicaciones (solo mirar)
@@ -93,46 +104,81 @@ def es_admin(usuario=None) -> bool:
     return puede("administrar", usuario)
 
 
-def login_widget():
+def _encabezado():
+    """La marca del sistema arriba del formulario."""
+    marca = ASSETS / "logo_login.png"
+    if marca.exists():
+        st.image(str(marca), width=68)
     st.markdown("###### SISTEMA DE GESTIÓN INTEGRAL DE MANTENIMIENTO")
     st.title("Iniciar sesión")
-    st.caption("Elegí tu usuario y entrá con tu contraseña.")
 
-    usuarios = get_usuarios_activos()
-    if not usuarios:
-        st.error("No hay usuarios activos cargados. Revisá la pestaña **Usuarios** de la planilla.")
-        return
 
-    por_email = {u["EMAIL"].strip().lower(): u for u in usuarios}
-    etiquetas = {f"{u['NOMBRE']} — {u['ROL']}": u["EMAIL"].strip().lower() for u in usuarios}
+def _elegir_password(usuario):
+    """Segundo paso, solo para quien todavía no tiene contraseña."""
+    st.info(f"Primer ingreso de **{usuario['NOMBRE']}**. "
+            "Elegí la contraseña que vas a usar de ahora en más.")
+    with st.form("crear_password"):
+        p1 = st.text_input("Nueva contraseña", type="password")
+        p2 = st.text_input("Repetir contraseña", type="password")
+        crear = st.form_submit_button("Crear contraseña e ingresar", type="primary",
+                                      width="stretch")
 
-    elegido = st.selectbox("Usuario", list(etiquetas.keys()))
-    usuario = por_email[etiquetas[elegido]]
-    tiene_password = bool(str(usuario.get("PASSWORD_HASH", "")).strip())
+    if crear:
+        if len(p1) < 6:
+            st.error("La contraseña tiene que tener al menos 6 caracteres.")
+        elif p1 != p2:
+            st.error("Las dos contraseñas no coinciden.")
+        else:
+            set_password_hash(usuario["EMAIL"], hash_password(p1))
+            st.session_state.pop("login_sin_password", None)
+            st.session_state["usuario"] = usuario
+            st.rerun()
 
-    if not tiene_password:
-        st.info("Primer ingreso: elegí la contraseña que vas a usar de ahora en más.")
-        with st.form("crear_password"):
-            p1 = st.text_input("Nueva contraseña", type="password")
-            p2 = st.text_input("Repetir contraseña", type="password")
-            if st.form_submit_button("Crear contraseña e ingresar", type="primary"):
-                if len(p1) < 6:
-                    st.error("La contraseña tiene que tener al menos 6 caracteres.")
-                elif p1 != p2:
-                    st.error("Las dos contraseñas no coinciden.")
-                else:
-                    set_password_hash(usuario["EMAIL"], hash_password(p1))
-                    st.session_state["usuario"] = usuario
-                    st.rerun()
-        return
+    if st.button("← Volver", width="stretch"):
+        st.session_state.pop("login_sin_password", None)
+        st.rerun()
 
-    with st.form("login"):
-        password = st.text_input("Contraseña", type="password")
-        if st.form_submit_button("Ingresar", type="primary"):
-            if verificar_password(password, str(usuario["PASSWORD_HASH"])):
+
+def login_widget():
+    # con layout="wide" un formulario a todo el ancho queda enorme; va centrado
+    _, centro, _ = st.columns([1, 1.3, 1])
+    with centro:
+        _encabezado()
+
+        usuarios = get_usuarios_activos()
+        if not usuarios:
+            st.error("No hay usuarios activos cargados. "
+                     "Revisá la pestaña **Usuarios** de la planilla.")
+            return
+
+        por_email = {str(u["EMAIL"]).strip().lower(): u for u in usuarios}
+
+        pendiente = st.session_state.get("login_sin_password")
+        if pendiente in por_email:
+            _elegir_password(por_email[pendiente])
+            return
+
+        st.caption("Entrá con tu email y tu contraseña.")
+        with st.form("login"):
+            email = st.text_input("Email", placeholder="nombre@ejemplo.com",
+                                  autocomplete="username")
+            password = st.text_input("Contraseña", type="password",
+                                     autocomplete="current-password")
+            entrar = st.form_submit_button("Ingresar", type="primary", width="stretch")
+
+        if entrar:
+            usuario = por_email.get(str(email).strip().lower())
+            if usuario is None:
+                st.error(ERROR_LOGIN)
+            elif not str(usuario.get("PASSWORD_HASH", "")).strip():
+                # nunca eligió contraseña: pasa al segundo paso
+                st.session_state["login_sin_password"] = str(email).strip().lower()
+                st.rerun()
+            elif verificar_password(password, str(usuario["PASSWORD_HASH"])):
                 st.session_state["usuario"] = usuario
                 st.rerun()
             else:
-                st.error("Contraseña incorrecta.")
+                st.error(ERROR_LOGIN)
 
-    st.caption("¿Olvidaste tu contraseña? Pedile a un ADMIN que la reinicie desde la sección Usuarios.")
+        st.caption("¿Olvidaste tu contraseña? Pedile a un ADMIN que la reinicie "
+                   "desde la sección Usuarios.")

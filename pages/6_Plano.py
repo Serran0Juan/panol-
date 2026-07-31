@@ -12,12 +12,12 @@ if current_user() is None:
 
 ASSETS = Path(__file__).parent.parent / "assets"
 
-st.title("🗺️ Plano del pañol")
+st.title("Plano del pañol")
 
 estanterias = get_estanterias()
 items = get_items()
 
-tab_plano, tab_estanterias = st.tabs(["📐 Plano", "🗄️ Estanterías"])
+tab_plano, tab_estanterias = st.tabs(["Plano", "Estanterías"])
 
 with tab_plano:
     plano = ASSETS / "plano_panol.png"

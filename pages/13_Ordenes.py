@@ -3,9 +3,12 @@
 import pandas as pd
 import streamlit as st
 
+import estilo
 from auth import current_user, exigir
-from sheets_backend import (ESTADOS_ABIERTOS, HORAS_ESTIMADAS_DEFECTO, ICONO_ESTADO_OT,
-                            PRIORIDADES, SLA_DIAS, TRANSICIONES_OT, asignar_orden,
+from orden_impresa import nombre_archivo, orden_en_html
+from sheets_backend import (ESTADOS_ABIERTOS, ESTADOS_OT, HORAS_ESTIMADAS_DEFECTO,
+                            PRIORIDADES, SLA_DIAS, TRANSICIONES_OT, ahora_texto,
+                            asignar_orden,
                             calcular_compromiso, cambiar_estado_orden, cerrar_orden,
                             get_ordenes, get_ot_estados, get_parametros,
                             get_usuarios_activos, parse_fecha)
@@ -33,22 +36,28 @@ sin_asignar = ordenes[ordenes["ESTADO"] == "SOLICITADA"]
 urgentes = abiertas[abiertas["PRIORIDAD"].str.upper() == "URGENTE"]
 resueltas = ordenes[ordenes["ESTADO"] == "RESUELTA"]
 
-k1, k2, k3, k4, k5 = st.columns(5)
-k1.metric("Abiertas", len(abiertas))
-k2.metric("Sin asignar", len(sin_asignar))
-k3.metric("Urgentes 🔴", len(urgentes))
-k4.metric("Vencidas ⏰", int(ordenes["vencida"].sum()))
-k5.metric("Resueltas", len(resueltas))
+
+vencidas_n = int(ordenes["vencida"].sum())
+estilo.fila_indicadores([
+    estilo.indicador("Abiertas", len(abiertas), "sin resolver"),
+    estilo.indicador("Sin asignar", len(sin_asignar), "sin responsable",
+                     estilo.COLORES_PRIORIDAD["ALTA"]),
+    estilo.indicador("Urgentes", len(urgentes), "para el mismo día",
+                     estilo.COLORES_PRIORIDAD["URGENTE"]),
+    estilo.indicador("Vencidas", vencidas_n, "pasaron su plazo",
+                     estilo.COLORES_PRIORIDAD["URGENTE"]),
+    estilo.indicador("Resueltas", len(resueltas), "cerradas en total"),
+])
 
 st.divider()
 
-tab_tablero, tab_detalle = st.tabs(["📋 Tablero", "🔎 Detalle y acciones"])
+tab_tablero, tab_detalle = st.tabs(["Tablero", "Detalle y acciones"])
 
 # ═════════════════════════════════════════════════ tablero
 with tab_tablero:
     f1, f2, f3, f4 = st.columns(4)
     with f1:
-        f_estado = st.selectbox("Estado", ["Abiertas", "Todas"] + list(ICONO_ESTADO_OT))
+        f_estado = st.selectbox("Estado", ["Abiertas", "Todas"] + ESTADOS_OT)
     with f2:
         f_sector = st.selectbox("Sector", ["Todos"] + sectores)
     with f3:
@@ -88,16 +97,21 @@ with tab_tablero:
         "dias_para_vencer": "Días restantes", "FECHA_PROGRAMADA": "Programada",
         "dias_abierta": "Días abierta", "SOLICITANTE": "Pidió",
     })
-    st.dataframe(tabla, hide_index=True, width="stretch", height=420)
-    st.download_button("⬇️ Descargar CSV", tabla.to_csv(index=False).encode("utf-8-sig"),
+    st.dataframe(
+        estilo.tabla(tabla, {"Estado": estilo.COLORES_ESTADO_OT,
+                             "Prioridad": estilo.COLORES_PRIORIDAD,
+                             "Sector": estilo.COLORES_SECTOR}),
+        hide_index=True, width="stretch", height=420)
+    st.download_button("Descargar CSV", tabla.to_csv(index=False).encode("utf-8-sig"),
                        file_name="ordenes_trabajo.csv", mime="text/csv")
 
     if not sin_asignar.empty:
-        st.subheader(f"🆕 Esperando asignación ({len(sin_asignar)})")
+        st.subheader(f"Esperando asignación ({len(sin_asignar)})")
         for _, o in sin_asignar.sort_values("ID_OT", ascending=False).iterrows():
             with st.container(border=True):
-                marca = " 🔴" if str(o["PRIORIDAD"]).upper() == "URGENTE" else ""
-                st.markdown(f"**{o['ID_OT']}** · {o['AREA']} · {o['PRIORIDAD']}{marca}")
+                st.markdown(estilo.cabecera_orden(o["ID_OT"], o["AREA"], o["ESTADO"],
+                                                 o["PRIORIDAD"]),
+                            unsafe_allow_html=True)
                 st.caption(f"{o['FECHA_ALTA']} · pidió {o['SOLICITANTE']}"
                            + (f" · hace {o['dias_abierta']} día(s)" if o["dias_abierta"] >= 0 else ""))
                 st.write(o["DESCRIPCION"])
@@ -105,7 +119,7 @@ with tab_tablero:
 # ═════════════════════════════════════════════════ detalle
 with tab_detalle:
     etiquetas = {
-        f"{ICONO_ESTADO_OT.get(o.ESTADO, '•')} {o.ID_OT} · {o.AREA} · {o.ESTADO}": o.ID_OT
+        f"{o.ID_OT} · {o.AREA} · {o.ESTADO}": o.ID_OT
         for o in ordenes.sort_values("ID_OT", ascending=False).itertuples()
     }
     elegida = st.selectbox("Orden", list(etiquetas.keys()))
@@ -115,8 +129,11 @@ with tab_detalle:
 
     izq, der = st.columns([2, 1])
     with izq:
-        st.subheader(f"{ICONO_ESTADO_OT.get(estado, '•')} {id_ot}")
-        st.write(f"**Lugar:** {o['AREA']}  ·  **Prioridad:** {o['PRIORIDAD']}")
+        st.subheader(id_ot)
+        st.markdown(estilo.etiqueta(estado, estilo.COLORES_ESTADO_OT) + " " +
+                    estilo.etiqueta(o["PRIORIDAD"], estilo.COLORES_PRIORIDAD),
+                    unsafe_allow_html=True)
+        st.write(f"**Lugar:** {o['AREA']}")
         st.write(f"**Problema:** {o['DESCRIPCION']}")
         if o["OBSERVACIONES"]:
             st.caption(f"Contacto: {o['OBSERVACIONES']}")
@@ -128,12 +145,24 @@ with tab_detalle:
                               f"Cierre: {o['FECHA_CIERRE']}"]
             st.caption(" · ".join(x for x in detalle_cierre if x))
     with der:
-        st.metric("Estado", estado)
+        st.caption("Estado")
+        st.markdown(estilo.etiqueta(estado, estilo.COLORES_ESTADO_OT),
+                    unsafe_allow_html=True)
         if o["ASIGNADO_A"]:
             st.write(f"**Responsable:** {o['ASIGNADO_A']}")
             st.caption(f"Sector {o['SECTOR_ASIGNADO']}")
         if estado in ESTADOS_ABIERTOS and o["dias_abierta"] >= 0:
             st.caption(f"Abierta hace {o['dias_abierta']} día(s)")
+
+        st.divider()
+        # El papel que se lleva el operario: anota lo que hizo y lo que usó, y
+        # el responsable del sector le firma la conformidad.
+        st.download_button(
+            "Imprimir orden", orden_en_html(o, usuario["NOMBRE"], ahora_texto()),
+            file_name=nombre_archivo(o), mime="text/html", width="stretch",
+            help="Descarga la orden en una hoja lista para imprimir, con lugar "
+                 "para el detalle del trabajo, los materiales y las firmas.")
+        st.caption("Se descarga y se abre con doble clic; ahí tenés el botón Imprimir.")
 
     st.divider()
 
@@ -226,6 +255,5 @@ with tab_detalle:
         st.divider()
         st.markdown("##### Seguimiento")
         for _, h in historia.sort_values("ID", ascending=False).iterrows():
-            icono = ICONO_ESTADO_OT.get(str(h["ESTADO"]).upper(), "•")
-            st.write(f"{icono} **{h['ESTADO']}** · {h['FECHA_HORA']} · {h['USUARIO']}"
+            st.write(f"**{h['ESTADO']}** · {h['FECHA_HORA']} · {h['USUARIO']}"
                      + (f" — {h['NOTA']}" if h["NOTA"] else ""))

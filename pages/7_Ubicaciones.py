@@ -2,6 +2,7 @@
 
 import streamlit as st
 
+import estilo
 from auth import current_user, exigir, puede
 from sheets_backend import get_estanterias, get_items, numero_estanteria, update_item
 
@@ -10,7 +11,7 @@ if usuario is None:
     st.stop()
 exigir("ver_gestion")
 
-st.title("📍 Asignar ubicaciones")
+st.title("Asignar ubicaciones")
 
 items = get_items()
 estanterias = get_estanterias()
@@ -22,10 +23,13 @@ if items.empty:
 sin_ubicacion = items[items["ubicacion"].str.strip() == ""]
 con_ubicacion = items[items["ubicacion"].str.strip() != ""]
 
-c1, c2, c3 = st.columns(3)
-c1.metric("Productos totales", len(items))
-c2.metric("Con ubicación ✅", len(con_ubicacion))
-c3.metric("Sin ubicación ⏳", len(sin_ubicacion))
+avance = len(con_ubicacion) / len(items) * 100 if len(items) else 0
+estilo.fila_indicadores([
+    estilo.indicador("Productos totales", len(items), "en el catálogo"),
+    estilo.indicador("Con ubicación", len(con_ubicacion), f"{avance:.0f}% de la carga"),
+    estilo.indicador("Sin ubicación", len(sin_ubicacion), "no se sabe dónde están",
+                     estilo.COLORES_STOCK["Mínimo"]),
+])
 st.progress(len(con_ubicacion) / len(items) if len(items) else 0)
 
 if not puede("editar_inventario"):
@@ -36,7 +40,7 @@ if not puede("editar_inventario"):
 st.caption("Consejo: filtrá por categoría o buscá un grupo de productos parecidos "
            "(ej. 'termofusion') y asignalos todos juntos a la misma estantería.")
 
-tab_lote, tab_uno = st.tabs(["⚡ Asignar en lote", "✏️ Uno por uno"])
+tab_lote, tab_uno = st.tabs(["Asignar en lote", "Uno por uno"])
 
 opciones_est = estanterias["estanteria"].tolist() if not estanterias.empty else []
 

@@ -33,10 +33,10 @@ def check(etiqueta, condicion, detalle=""):
         print(f"  FALLA {etiqueta} {detalle}")
 
 
-hoy = dt.date.today()
+hoy = sb.hoy()
 
 print("1. Plazo automático según la prioridad")
-base = dt.datetime.now()
+base = sb.ahora()
 for prioridad, dias in sb.SLA_DIAS.items():
     esperado = (base + dt.timedelta(days=dias)).strftime("%Y-%m-%d")
     check(f"{prioridad} -> {dias} día(s)",

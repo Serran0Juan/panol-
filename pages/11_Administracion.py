@@ -27,19 +27,19 @@ sectores = parametros.get("SECTOR", []) or ["MANTENIMIENTO"]
 c1, c2, c3 = st.columns(3)
 with c1:
     with st.container(border=True):
-        st.markdown("### 📦 Materiales y categorías")
+        st.markdown("### Materiales y categorías")
         st.caption("Catálogo, unidades de medida y mínimos.")
         st.markdown(f"**{len(items)} materiales · "
                     f"{items['categoria'].nunique()} categorías**")
 with c2:
     with st.container(border=True):
-        st.markdown("### 📍 Ubicaciones")
+        st.markdown("### Ubicaciones")
         st.caption("Estanterías usadas para localizar cada material.")
         ubicados = int((items["ubicacion"].str.strip() != "").sum())
         st.markdown(f"**{len(estanterias)} estanterías · {ubicados} materiales ubicados**")
 with c3:
     with st.container(border=True):
-        st.markdown("### 👥 Usuarios y permisos")
+        st.markdown("### Usuarios y permisos")
         st.caption("Quién entra a la app y qué puede hacer.")
         activos = usuarios["ACTIVO"].astype(str).str.upper().isin(["TRUE", "1", "SI", "SÍ"]).sum()
         st.markdown(f"**{len(ROLES)} perfiles · {activos} usuarios activos**")
@@ -47,11 +47,11 @@ with c3:
 st.divider()
 
 tab_usuarios, tab_permisos, tab_catalogo, tab_ubic = st.tabs(
-    ["👥 Usuarios", "🔐 Permisos", "📦 Catálogo", "📍 Ubicaciones"])
+    ["Usuarios", "Permisos", "Catálogo", "Ubicaciones"])
 
 # ───────────────────────────────────────────── usuarios
 with tab_usuarios:
-    sub_lista, sub_nuevo = st.tabs(["Cargados", "➕ Nuevo usuario"])
+    sub_lista, sub_nuevo = st.tabs(["Cargados", "Nuevo usuario"])
 
     with sub_lista:
         if usuarios.empty:
@@ -132,7 +132,7 @@ with tab_permisos:
     for rol in ROLES:
         fila = {"Perfil": rol}
         for etiqueta, permiso in ACCIONES:
-            fila[etiqueta] = "✅" if permiso is None or permiso in PERMISOS[rol] else "—"
+            fila[etiqueta] = "Sí" if permiso is None or permiso in PERMISOS[rol] else "—"
         filas.append(fila)
     st.dataframe(pd.DataFrame(filas), hide_index=True, width="stretch")
 

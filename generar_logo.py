@@ -1,11 +1,19 @@
-"""Genera el logo de la barra lateral.
+"""Genera la marca del sistema: el engranaje sobre el cuadrado redondeado.
 
-Un engranaje sobre un cuadrado redondeado, con el nombre del sistema al lado.
 Se dibuja al cuádruple de tamaño y después se reduce, para que los bordes
-queden suaves.
+queden suaves. Todo sale al doble de la medida en que se muestra, así en las
+pantallas de alta resolución no se ve borroso.
 
-Se corre una sola vez; el resultado va a assets/. Volver a correrlo solo si
-cambia el nombre del sistema o los colores.
+Genera tres archivos, cada uno para un fondo distinto:
+  - logo_sidebar.png : marca celeste + nombre, para la barra lateral azul noche
+  - logo_chico.png   : marca azul, para cuando la barra está plegada y el ícono
+                       queda sobre el fondo blanco. También es el ícono de la
+                       pestaña del navegador.
+  - logo_login.png   : la misma marca azul, más grande, para la pantalla de
+                       inicio de sesión
+
+Se corre a mano; el resultado va a assets/. Volver a correrlo solo si cambia el
+nombre del sistema o los colores.
 
 Uso:
     py -3 generar_logo.py
@@ -19,8 +27,10 @@ from PIL import Image, ImageDraw, ImageFont
 ASSETS = Path(__file__).parent / "assets"
 TITULO = ["Sistema de Gestión", "Integral de Mantenimiento"]
 
-# La barra lateral es azul noche, así que la marca va en claro.
+# La barra lateral es azul noche, así que ahí la marca va en claro. Sobre el
+# fondo blanco (barra plegada, pantalla de login) va en el azul del sistema.
 CELESTE = (111, 168, 220, 255)
+AZUL = (20, 80, 126, 255)  # #14507E, el primaryColor de config.toml
 AZUL_NOCHE = (14, 32, 56, 255)
 BLANCO = (245, 249, 255, 255)
 GRIS_CLARO = (150, 174, 202, 255)
@@ -51,15 +61,15 @@ def puntos_engranaje(cx, cy, r_diente, r_base, dientes, ancho=0.42):
     return pts
 
 
-def dibujar_marca(lado):
-    """Cuadrado redondeado celeste con un engranaje calado en el medio."""
+def dibujar_marca(lado, color=CELESTE):
+    """Cuadrado redondeado con un engranaje calado en el medio."""
     L = lado * ESCALA
     marca = Image.new("RGBA", (L, L), (0, 0, 0, 0))
 
     # el cuadrado de fondo
     fondo = Image.new("RGBA", (L, L), (0, 0, 0, 0))
     ImageDraw.Draw(fondo).rounded_rectangle([0, 0, L - 1, L - 1],
-                                            radius=int(L * 0.22), fill=CELESTE)
+                                            radius=int(L * 0.22), fill=color)
 
     # el engranaje se cala: máscara blanca = se ve el celeste
     mascara = Image.new("L", (L, L), 255)
@@ -73,14 +83,15 @@ def dibujar_marca(lado):
     return marca.resize((lado, lado), Image.LANCZOS)
 
 
-def generar(ancho, alto, salida, con_texto=True, tam_fuente=13):
+def generar(ancho, alto, salida, con_texto=True, tam_fuente=13, color=CELESTE,
+            margen=8):
     img = Image.new("RGBA", (ancho, alto), (0, 0, 0, 0))
-    lado = alto - 8
-    img.alpha_composite(dibujar_marca(lado), (0, 4))
+    lado = alto - margen
+    img.alpha_composite(dibujar_marca(lado, color), (margen // 2, margen // 2))
 
     if con_texto:
         d = ImageDraw.Draw(img)
-        x = lado + 13
+        x = lado + alto * 0.22
         d.text((x, alto * 0.17), TITULO[0], font=fuente(tam_fuente), fill=GRIS_CLARO)
         d.text((x, alto * 0.45), TITULO[1], font=fuente(tam_fuente + 3), fill=BLANCO)
 
@@ -90,5 +101,7 @@ def generar(ancho, alto, salida, con_texto=True, tam_fuente=13):
 
 
 if __name__ == "__main__":
-    generar(340, 58, "logo_sidebar.png")
-    generar(58, 58, "logo_chico.png", con_texto=False)
+    # al doble de la medida en que se muestran, para que no se vean borrosos
+    generar(680, 116, "logo_sidebar.png", tam_fuente=26, margen=16)
+    generar(128, 128, "logo_chico.png", con_texto=False, color=AZUL, margen=0)
+    generar(256, 256, "logo_login.png", con_texto=False, color=AZUL, margen=0)

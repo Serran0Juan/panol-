@@ -9,11 +9,11 @@ usuario = current_user()
 if usuario is None:
     st.stop()
 
-st.title("📢 Pedidos y reclamos")
+st.title("Pedidos y reclamos")
 
 TIPOS = ["FALTA STOCK", "PRODUCTO NUEVO", "PRODUCTO ROTO/VENCIDO", "UBICACIÓN INCORRECTA", "OTRO"]
 
-tab_nuevo, tab_mios, tab_todos = st.tabs(["➕ Nuevo pedido", "📋 Los míos", "🗂️ Todos"])
+tab_nuevo, tab_mios, tab_todos = st.tabs(["Nuevo pedido", "Los míos", "Todos"])
 
 with tab_nuevo:
     items = get_items()
@@ -45,8 +45,7 @@ with tab_mios:
     else:
         for _, r in mios.sort_values("ID", ascending=False).iterrows():
             with st.container(border=True):
-                icono = "🟢" if str(r["ESTADO"]).upper() == "RESUELTO" else "🟠"
-                st.write(f"{icono} **{r['TIPO']}** · {r['PRODUCTO'] or 'sin producto'}")
+                st.write(f"**{r['TIPO']}** · {r['PRODUCTO'] or 'sin producto'}")
                 st.caption(f"{r['FECHA_HORA']} · Estado: {r['ESTADO']}")
                 st.write(r["DETALLE"])
                 if r["RESPUESTA"]:

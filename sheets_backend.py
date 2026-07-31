@@ -24,6 +24,40 @@ import streamlit as st
 DEVDATA_DIR = Path(__file__).parent / "_devdata"
 SEED_XLSX = DEVDATA_DIR / "seed_sheet.xlsx"
 
+# ── Hora local ──────────────────────────────────────────────────────────────
+# El servidor de Streamlit Cloud corre en UTC, así que dt.datetime.now() daba
+# la hora de Londres: un vale cargado a las 9 de la mañana quedaba registrado a
+# las 12. Toda fecha que la app escribe o compara pasa por acá.
+# Argentina está fija en UTC-3 desde 2009, así que si el sistema no trae la base
+# de husos horarios alcanza con el desfasaje fijo.
+try:
+    from zoneinfo import ZoneInfo
+
+    ZONA = ZoneInfo("America/Argentina/Buenos_Aires")
+except Exception:  # noqa: BLE001  (falta tzdata: caemos al offset fijo)
+    ZONA = dt.timezone(dt.timedelta(hours=-3))
+
+FORMATO_FECHA_HORA = "%Y-%m-%d %H:%M:%S"
+
+
+def ahora() -> dt.datetime:
+    """Fecha y hora de La Plata, sin la zona pegada.
+
+    Se devuelve "ingenua" a propósito: en la planilla las fechas están guardadas
+    sin zona, y mezclar fechas con y sin zona no se puede comparar.
+    """
+    return dt.datetime.now(ZONA).replace(tzinfo=None)
+
+
+def ahora_texto() -> str:
+    """La hora local lista para escribir en la planilla."""
+    return ahora().strftime(FORMATO_FECHA_HORA)
+
+
+def hoy() -> dt.date:
+    return ahora().date()
+
+
 HOJA_INVENTARIO = "Inventario"
 HOJA_VALES = "Vales APP"
 HOJA_REGISTRO = "Registro APP"
@@ -96,10 +130,6 @@ ORDEN_PRIORIDAD = {"URGENTE": 0, "ALTA": 1, "MEDIA": 2, "BAJA": 3}
 SLA_DIAS = {"URGENTE": 0, "ALTA": 3, "MEDIA": 7, "BAJA": 15}
 HORAS_ESTIMADAS_DEFECTO = 1.0
 HORAS_JORNADA = 6  # horas útiles por persona y por día, para medir la carga
-ICONO_ESTADO_OT = {
-    "SOLICITADA": "🆕", "ASIGNADA": "📌", "EN CURSO": "🔧",
-    "PAUSADA": "⏸️", "RESUELTA": "✅", "ANULADA": "🚫",
-}
 
 # Tipos que puede tener cada renglón de una entrega a un operario.
 TIPOS_ENTREGA = ["CONSUMO", "PRESTADO"]
@@ -334,12 +364,21 @@ def _formula_prestamo(n: int) -> str:
             f'{_RANGO_ESTADO_RENGLON};"PENDIENTE")')
 
 
+ESTADOS_STOCK = ["OK", "Mínimo", "Sin stock"]
+
+
 def _estado(stock_actual: float, stock_minimo: float) -> str:
+    """Semáforo del stock. El color lo pone la pantalla, ver estilo.COLORES_STOCK.
+
+    En la planilla la columna Estado/Alerta guarda lo mismo pero con círculos de
+    colores, porque ahí no hay forma de pintar la celda según el valor. La app
+    calcula el estado por su cuenta y no lee esa columna.
+    """
     if stock_actual <= 0:
-        return "🔴 Sin stock"
+        return "Sin stock"
     if stock_actual <= stock_minimo:
-        return "🟡 Mínimo"
-    return "🟢 OK"
+        return "Mínimo"
+    return "OK"
 
 
 @st.cache_data(ttl=30, show_spinner=False)
@@ -484,6 +523,24 @@ def get_movimientos() -> pd.DataFrame:
                       "REGISTRADO_POR": ""})
 
 
+def estado_movimiento(movs: pd.DataFrame) -> pd.Series:
+    """Estado de cada renglón en texto, para mostrar en las tablas.
+
+    Un préstamo queda pendiente hasta que vuelve todo. Si volvió una parte, se
+    muestra cuánto falta: "Pendiente (3 de 10)".
+    """
+    if movs.empty:
+        return pd.Series(dtype=str)
+
+    def etiqueta(r):
+        if str(r["ESTADO_RENGLON"]).strip().upper() != "PENDIENTE":
+            return "Cerrado"
+        falta, total = float(r["pendiente"]), float(r["CANT"])
+        return f"Pendiente ({falta:g} de {total:g})" if falta < total else "Pendiente"
+
+    return movs.apply(etiqueta, axis=1)
+
+
 FORMATOS_FECHA = ("%Y-%m-%d %H:%M:%S", "%d/%m/%Y %H:%M:%S", "%d/%m/%Y %H:%M",
                   "%d/%m/%Y", "%Y-%m-%d")
 
@@ -505,7 +562,7 @@ def dias_desde(fecha_texto: str) -> int:
     """Días transcurridos desde una fecha de vale. -1 si no se puede interpretar."""
     for formato in ("%Y-%m-%d %H:%M:%S", "%d/%m/%Y %H:%M:%S", "%d/%m/%Y %H:%M", "%d/%m/%Y", "%Y-%m-%d"):
         try:
-            return (dt.datetime.now() - dt.datetime.strptime(str(fecha_texto).strip(), formato)).days
+            return (ahora() - dt.datetime.strptime(str(fecha_texto).strip(), formato)).days
         except ValueError:
             continue
     return -1
@@ -542,7 +599,7 @@ def registrar_vale(sector, area_sala, receptor, observaciones, renglones, regist
         raise ValueError("El vale no tiene renglones")
 
     id_vale = _siguiente_id_vale()
-    ahora = dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    momento = ahora_texto()
 
     tipos = {r["tipo"] for r in renglones}
     tipo_vale = tipos.pop() if len(tipos) == 1 else "MIXTO"
@@ -550,7 +607,7 @@ def registrar_vale(sector, area_sala, receptor, observaciones, renglones, regist
     estado_vale = "ABIERTO" if hay_prestamos else "CERRADO"
 
     _agregar_fila(HOJA_VALES, {
-        "ID VALE": id_vale, "FECHA HORA": ahora, "TIPO MOVIMIENTO": tipo_vale,
+        "ID VALE": id_vale, "FECHA HORA": momento, "TIPO MOVIMIENTO": tipo_vale,
         "SECTOR": sector, "ÁREA / SALA": area_sala, "Receptor / Para Quien": receptor,
         "OBSERVACIONES": observaciones, "ESTADO VALE": estado_vale, "DIAS RETRASO": "",
         "REGISTRADO_POR": registrado_por,
@@ -563,7 +620,7 @@ def registrar_vale(sector, area_sala, receptor, observaciones, renglones, regist
         _agregar_fila(HOJA_REGISTRO, {
             "ID_REGISTRO": id_reg, "ID_VALE_REF": id_vale, "ID_ITEM": r["item_id"],
             "CANT": r["cantidad"], "UNIDAD": r.get("unidad", ""), "TIPO_MOV": r["tipo"],
-            "DESCRIPCIÓN_ITEM": r["descripcion"], "FECHA_VALE": ahora,
+            "DESCRIPCIÓN_ITEM": r["descripcion"], "FECHA_VALE": momento,
             "OBSERVACIONES": observaciones, "ESTADO_VALE (auto)": estado_vale,
             "CANT_DEVUELTA": 0, "ESTADO_RENGLON": estado_renglon,
         }, COLS_REGISTRO)
@@ -696,9 +753,9 @@ def registrar_ingreso(item_id, cantidad, observaciones, responsable):
     fila = fila.iloc[0]
 
     id_vale = _siguiente_id_vale()
-    ahora = dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    momento = ahora_texto()
     _agregar_fila(HOJA_VALES, {
-        "ID VALE": id_vale, "FECHA HORA": ahora, "TIPO MOVIMIENTO": "INGRESO",
+        "ID VALE": id_vale, "FECHA HORA": momento, "TIPO MOVIMIENTO": "INGRESO",
         "SECTOR": "", "ÁREA / SALA": "", "Receptor / Para Quien": responsable,
         "OBSERVACIONES": observaciones, "ESTADO VALE": "CERRADO", "DIAS RETRASO": "",
         "REGISTRADO_POR": responsable,
@@ -707,7 +764,7 @@ def registrar_ingreso(item_id, cantidad, observaciones, responsable):
         "ID_REGISTRO": _siguiente_id_registro(), "ID_VALE_REF": id_vale,
         "ID_ITEM": int(item_id), "CANT": cantidad, "UNIDAD": fila["unidad"],
         "TIPO_MOV": "INGRESO", "DESCRIPCIÓN_ITEM": fila["descripcion"],
-        "FECHA_VALE": ahora, "OBSERVACIONES": observaciones,
+        "FECHA_VALE": momento, "OBSERVACIONES": observaciones,
         "ESTADO_VALE (auto)": "CERRADO", "CANT_DEVUELTA": 0, "ESTADO_RENGLON": "CERRADO",
     }, COLS_REGISTRO)
 
@@ -794,7 +851,7 @@ def add_reclamo(tipo, producto, detalle, email, nombre):
     nums = pd.to_numeric(reclamos["ID"], errors="coerce").dropna() if not reclamos.empty else pd.Series(dtype=float)
     nuevo_id = int(nums.max()) + 1 if len(nums) else 1
     _agregar_fila(HOJA_RECLAMOS, {
-        "ID": nuevo_id, "FECHA_HORA": dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "ID": nuevo_id, "FECHA_HORA": ahora_texto(),
         "TIPO": tipo, "PRODUCTO": producto, "DETALLE": detalle,
         "EMAIL": email, "NOMBRE": nombre, "ESTADO": "ABIERTO", "RESPUESTA": "",
     }, COLS_RECLAMOS)
@@ -880,12 +937,12 @@ def get_ordenes() -> pd.DataFrame:
     df["dias_abierta"] = df["FECHA_ALTA"].apply(dias_desde)
     df["orden_prioridad"] = df["PRIORIDAD"].map(ORDEN_PRIORIDAD).fillna(9)
 
-    hoy = dt.date.today()
+    dia = hoy()
     # se arman como listas y no con .apply(): pandas convertiría los None en NaT
     # y después NaT no se puede restar con una fecha
     compromisos = [parse_fecha(v) for v in df["FECHA_COMPROMISO"]]
     df["dias_para_vencer"] = [
-        (f.date() - hoy).days if f is not None else None for f in compromisos]
+        (f.date() - dia).days if f is not None else None for f in compromisos]
     abierta = df["ESTADO"].isin(ESTADOS_ABIERTOS)
     df["vencida"] = [
         bool(a and d is not None and d < 0)
@@ -901,7 +958,7 @@ def get_ordenes() -> pd.DataFrame:
 
 def calcular_compromiso(prioridad: str, desde=None) -> str:
     """Fecha comprometida según la prioridad. Devuelve texto listo para la planilla."""
-    base = desde or dt.datetime.now()
+    base = desde or ahora()
     dias = SLA_DIAS.get(str(prioridad).strip().upper(), 7)
     return (base + dt.timedelta(days=dias)).strftime("%Y-%m-%d")
 
@@ -930,7 +987,7 @@ def _anotar_estado(id_ot: str, estado: str, usuario: str, nota: str = ""):
     _agregar_fila(HOJA_OT_ESTADOS, {
         "ID": int(nums.max()) + 1 if len(nums) else 1,
         "ID_OT": id_ot,
-        "FECHA_HORA": dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "FECHA_HORA": ahora_texto(),
         "ESTADO": estado, "USUARIO": usuario, "NOTA": nota,
     }, COLS_OT_ESTADOS)
 
@@ -939,9 +996,9 @@ def crear_solicitud(area, descripcion, prioridad, solicitante, solicitante_email
                     observaciones=""):
     """Alta de una solicitud de reparación. Nace como orden en estado SOLICITADA."""
     id_ot = _siguiente_id_ot()
-    ahora = dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    momento = ahora_texto()
     _agregar_fila(HOJA_ORDENES, {
-        "ID_OT": id_ot, "FECHA_ALTA": ahora, "SOLICITANTE": solicitante,
+        "ID_OT": id_ot, "FECHA_ALTA": momento, "SOLICITANTE": solicitante,
         "SOLICITANTE_EMAIL": solicitante_email, "AREA": area, "DESCRIPCION": descripcion,
         "PRIORIDAD": prioridad, "SECTOR_ASIGNADO": "", "ASIGNADO_A": "",
         "ESTADO": "SOLICITADA", "FECHA_ASIGNACION": "", "FECHA_CIERRE": "",
@@ -986,7 +1043,7 @@ def asignar_orden(id_ot, sector, asignado_a, prioridad, usuario, nota="",
 
     if fila["ESTADO"] == "SOLICITADA":
         cambios["ESTADO"] = "ASIGNADA"
-        cambios["FECHA_ASIGNACION"] = dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        cambios["FECHA_ASIGNACION"] = ahora_texto()
 
     _escribir_celdas(HOJA_ORDENES, COLS_ORDENES, int(fila["_fila"]), cambios)
     _anotar_estado(id_ot, cambios.get("ESTADO", fila["ESTADO"]), usuario,
@@ -1013,7 +1070,7 @@ def cambiar_estado_orden(id_ot, nuevo_estado, usuario, nota=""):
 
     cambios = {"ESTADO": nuevo_estado}
     if nuevo_estado in ("RESUELTA", "ANULADA"):
-        cambios["FECHA_CIERRE"] = dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        cambios["FECHA_CIERRE"] = ahora_texto()
     _escribir_celdas(HOJA_ORDENES, COLS_ORDENES, int(fila["_fila"]), cambios)
     _anotar_estado(id_ot, nuevo_estado, usuario, nota)
     limpiar_cache()
@@ -1029,7 +1086,7 @@ def cerrar_orden(id_ot, trabajo_realizado, causa, horas, usuario, nota=""):
 
     _escribir_celdas(HOJA_ORDENES, COLS_ORDENES, int(fila["_fila"]), {
         "ESTADO": "RESUELTA",
-        "FECHA_CIERRE": dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "FECHA_CIERRE": ahora_texto(),
         "TRABAJO_REALIZADO": trabajo_realizado, "CAUSA": causa, "HORAS": horas,
     })
     _anotar_estado(id_ot, "RESUELTA", usuario, nota or trabajo_realizado[:120])

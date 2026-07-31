@@ -4,7 +4,9 @@ import pandas as pd
 import streamlit as st
 
 from auth import current_user
-from sheets_backend import (ESTADOS_ABIERTOS, ICONO_ESTADO_OT, TRANSICIONES_OT,
+import estilo
+from orden_impresa import nombre_archivo, orden_en_html
+from sheets_backend import (ESTADOS_ABIERTOS, TRANSICIONES_OT, ahora_texto,
                             cambiar_estado_orden, cerrar_orden, get_ordenes)
 
 usuario = current_user()
@@ -47,10 +49,9 @@ else:
         id_ot = o["ID_OT"]
         estado = o["ESTADO"]
         with st.container(border=True):
-            marca = " 🔴" if str(o["PRIORIDAD"]).upper() == "URGENTE" else ""
-            st.markdown(f"{ICONO_ESTADO_OT.get(estado, '•')} **{id_ot}** · {o['AREA']} "
-                        f"· {o['PRIORIDAD']}{marca}")
-            st.caption(f"{estado} · pidió {o['SOLICITANTE']} el {o['FECHA_ALTA']}"
+            st.markdown(estilo.cabecera_orden(id_ot, o["AREA"], estado, o["PRIORIDAD"]),
+                        unsafe_allow_html=True)
+            st.caption(f"Pidió {o['SOLICITANTE']} el {o['FECHA_ALTA']}"
                        + (f" · hace {o['dias_abierta']} día(s)" if o["dias_abierta"] >= 0 else ""))
             st.write(o["DESCRIPCION"])
             if o["OBSERVACIONES"]:
@@ -61,14 +62,23 @@ else:
             if d is not None and not pd.isna(d):
                 d = int(d)
                 if d < 0:
-                    st.error(f"⏰ Vencida hace {abs(d)} día(s) — era para el "
+                    st.error(f"Vencida hace {abs(d)} día(s) — era para el "
                              f"{o['FECHA_COMPROMISO']}")
                 elif d == 0:
                     st.warning("Vence hoy")
                 else:
                     st.caption(f"Vence en {d} día(s) — {o['FECHA_COMPROMISO']}")
             if o["dia_programado"]:
-                st.caption(f"📅 Programada para el {o['dia_programado'].strftime('%d/%m/%Y')}")
+                st.caption(f"Programada para el {o['dia_programado'].strftime('%d/%m/%Y')}")
+
+            # la hoja para llevarse al trabajo y hacerla firmar al volver
+            st.download_button("Imprimir orden",
+                               orden_en_html(o, usuario["NOMBRE"], ahora_texto()),
+                               file_name=nombre_archivo(o), mime="text/html",
+                               key=f"imprimir_{id_ot}",
+                               help="Para anotar a mano qué hiciste y qué materiales "
+                                    "usaste, y que el responsable del sector te firme "
+                                    "la conformidad.")
 
             # cambiar de estado sin salir de la tarjeta
             posibles = [e for e in TRANSICIONES_OT.get(estado, []) if e not in ("RESUELTA", "ANULADA")]
@@ -80,7 +90,7 @@ else:
                         cambiar_estado_orden(id_ot, nuevo, usuario["NOMBRE"])
                         st.rerun()
 
-            with st.expander("✅ Cerrar esta orden"):
+            with st.expander("Cerrar esta orden"):
                 with st.form(f"cerrar_mia_{id_ot}"):
                     trabajo = st.text_area("¿Qué hiciste? *", height=100,
                                            placeholder="Detalle de la reparación.")

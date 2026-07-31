@@ -6,10 +6,11 @@ import pandas as pd
 import plotly.express as px
 import streamlit as st
 
+import estilo
 from auth import current_user, exigir
-from estilo import AMBAR, AZUL, ROJO, VERDE
-from sheets_backend import (ESTADOS_ABIERTOS, carga_por_persona, get_ordenes,
-                            indicadores_mantenimiento, parse_fecha)
+from estilo import AMBAR, AZUL, ROJO, VERDE  # noqa: F401  (los usan los gráficos)
+from sheets_backend import (ESTADOS_ABIERTOS, ahora, carga_por_persona, get_ordenes,
+                            hoy, indicadores_mantenimiento, parse_fecha)
 
 usuario = current_user()
 if usuario is None:
@@ -34,30 +35,39 @@ with c_periodo:
 dias = {"Últimos 30 días": 30, "Últimos 90 días": 90}.get(periodo)
 vista = ordenes
 if dias:
-    corte = dt.datetime.now() - dt.timedelta(days=dias)
+    corte = ahora() - dt.timedelta(days=dias)
     vista = ordenes[ordenes["FECHA_ALTA"].apply(
         lambda f: (parse_fecha(f) or dt.datetime.min) >= corte)]
 elif periodo == "Este año":
     vista = ordenes[ordenes["FECHA_ALTA"].apply(
-        lambda f: (parse_fecha(f) or dt.datetime.min).year == dt.date.today().year)]
+        lambda f: (parse_fecha(f) or dt.datetime.min).year == hoy().year)]
 
 ind = indicadores_mantenimiento(vista)
 
-# ───────────────────────────────────── indicadores
-k1, k2, k3, k4 = st.columns(4)
-k1.metric("Órdenes del período", ind["total"])
-k2.metric("Abiertas", ind["abiertas"])
-k3.metric("Vencidas ⏰", ind["vencidas"])
-k4.metric("Sin asignar", ind["sin_asignar"])
 
-m1, m2, m3, m4 = st.columns(4)
-m1.metric("Resueltas", ind["resueltas"])
-m2.metric("Días promedio de resolución",
-          f"{ind['dias_promedio']:g}" if ind["dias_promedio"] is not None else "—")
-m3.metric("Cumplimiento del plazo",
-          f"{ind['cumplimiento']}%" if ind["cumplimiento"] is not None else "—",
-          help="Órdenes resueltas antes de su fecha comprometida.")
-m4.metric("Horas trabajadas", f"{ind['horas_cerradas']:g}")
+# ───────────────────────────────────── indicadores
+cumplimiento = ind["cumplimiento"]
+estilo.fila_indicadores([
+    estilo.indicador("Órdenes del período", ind["total"], "dadas de alta"),
+    estilo.indicador("Abiertas", ind["abiertas"], "sin resolver todavía"),
+    estilo.indicador("Vencidas", ind["vencidas"], "pasaron su plazo",
+                     estilo.COLORES_PRIORIDAD["URGENTE"]),
+    estilo.indicador("Sin asignar", ind["sin_asignar"], "sin responsable",
+                     estilo.COLORES_PRIORIDAD["ALTA"]),
+])
+estilo.fila_indicadores([
+    estilo.indicador("Resueltas", ind["resueltas"], "en el período"),
+    estilo.indicador("Demora promedio",
+                     f"{ind['dias_promedio']:g} d" if ind["dias_promedio"] is not None else "—",
+                     "del alta al cierre"),
+    estilo.indicador("Cumplimiento del plazo",
+                     f"{cumplimiento}%" if cumplimiento is not None else "—",
+                     "resueltas antes de vencer",
+                     None if cumplimiento is None or cumplimiento >= 80
+                     else estilo.COLORES_PRIORIDAD["ALTA"]),
+    estilo.indicador("Horas trabajadas", f"{ind['horas_cerradas']:g}",
+                     "según los cierres"),
+])
 
 if ind["cumplimiento"] is not None and ind["cumplimiento"] < 70:
     st.warning(f"Solo el {ind['cumplimiento']}% de las órdenes se resolvió dentro del "
@@ -118,7 +128,7 @@ if serie:
 # ───────────────────────────────────── vencidas
 vencidas = vista[vista["vencida"]]
 if not vencidas.empty:
-    st.subheader(f"⏰ Órdenes vencidas ({len(vencidas)})")
+    st.subheader(f"Órdenes vencidas ({len(vencidas)})")
     st.dataframe(
         vencidas.sort_values("dias_para_vencer")[
             ["ID_OT", "AREA", "DESCRIPCION", "PRIORIDAD", "SECTOR_ASIGNADO",
@@ -160,9 +170,9 @@ reporte = vista[
     "TRABAJO_REALIZADO": "Trabajo realizado", "CAUSA": "Causa", "SOLICITANTE": "Pidió",
 })
 
-st.download_button(f"⬇️ Descargar el reporte ({periodo})",
+st.download_button(f"Descargar el reporte ({periodo})",
                    reporte.to_csv(index=False).encode("utf-8-sig"),
-                   file_name=f"mantenimiento_{dt.date.today():%Y-%m-%d}.csv",
+                   file_name=f"mantenimiento_{hoy():%Y-%m-%d}.csv",
                    mime="text/csv", type="primary")
 
 with st.expander("Ver el detalle completo"):
