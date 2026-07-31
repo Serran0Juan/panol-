@@ -17,6 +17,14 @@ primaryColor = "#6FA8DC"
 [client]
 toolbarMode = "minimal"
 
+[browser]
+# Streamlit viene con la estadística de uso activada: el navegador de cada
+# usuario le manda datos anónimos al servicio de analítica de Streamlit. No
+# expone datos del pañol, pero los antivirus y bloqueadores lo marcan como
+# "rastreador" y asustan a la gente. En un sistema del hospital no aporta nada,
+# así que va apagada.
+gatherUsageStats = false
+
 [server]
 # al guardar un archivo, la app se actualiza sola
 runOnSave = true

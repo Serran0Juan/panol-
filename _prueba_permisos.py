@@ -50,5 +50,28 @@ for accion in TODAS:
     else:
         ok += 1
 
+print("\nTexto de los usuarios metido en HTML")
+import estilo  # noqa: E402
+
+# El área de una orden la escribe a mano cualquiera. Si no se escapara, esa
+# etiqueta se ejecutaría en la pantalla de todos los que abren la orden.
+ATAQUE = '<img src=x onerror="alert(1)">'
+for nombre, salida in [
+    ("cabecera de la orden", estilo.cabecera_orden("OT-1", ATAQUE, "ASIGNADA", "ALTA")),
+    ("etiqueta de color", estilo.badge(ATAQUE)),
+    ("tarjeta de indicador", estilo.indicador("Abiertas", ATAQUE, ATAQUE)),
+]:
+    # lo que importa es que no quede una etiqueta abierta: con el < escapado,
+    # el resto ("onerror=...") es texto suelto que el navegador solo muestra
+    if "<img" in salida:
+        fallos += 1
+        print(f"  FALLA {nombre} deja pasar una etiqueta HTML sin escapar")
+    elif "&lt;img" not in salida:
+        fallos += 1
+        print(f"  FALLA {nombre} perdió el texto en lugar de escaparlo")
+    else:
+        ok += 1
+        print(f"  OK    {nombre} escapa el HTML")
+
 print(f"\n{'=' * 46}\nRESULTADO: {ok} OK, {fallos} fallas\n{'=' * 46}")
 raise SystemExit(1 if fallos else 0)

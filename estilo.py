@@ -12,6 +12,8 @@ tiene su color definido acá y en ningún otro lado, así una misma cosa se ve
 igual en toda la app.
 """
 
+import html
+
 import streamlit as st
 
 AZUL_NOCHE = "#0E2038"
@@ -72,6 +74,17 @@ COLORES_RENGLON = {
     "Cerrado": (VERDE, "#DCFCE7", "#6EC177"),
     "Pendiente": (AMBAR, "#FEF3C7", "#E9B949"),
 }
+
+
+def escapar(valor) -> str:
+    """Deja un texto listo para meter dentro de HTML.
+
+    Todo lo que se dibuja con unsafe_allow_html tiene que pasar por acá. El
+    área de una orden, por ejemplo, la escribe a mano cualquier usuario al
+    cargar una solicitud: sin escapar, alguien podría dejar etiquetas HTML que
+    después se ejecutan en la pantalla del resto.
+    """
+    return html.escape(str(valor if valor is not None else ""))
 
 
 def colores(valor, mapa) -> tuple[str, str, str]:
@@ -337,7 +350,7 @@ def badge(texto: str, tono="gris") -> str:
     color, fondo = (tono if isinstance(tono, tuple) else TONOS.get(tono, NEUTRO))[:2]
     return (f'<span style="background:{fondo};color:{color};padding:2px 10px;'
             f'border-radius:999px;font-size:.75rem;font-weight:650;'
-            f'white-space:nowrap;">{texto}</span>')
+            f'white-space:nowrap;">{escapar(texto)}</span>')
 
 
 def etiqueta(valor, mapa) -> str:
@@ -355,7 +368,8 @@ def cabecera_orden(id_ot, area, estado, prioridad="") -> str:
     pastillas = [etiqueta(estado, COLORES_ESTADO_OT)]
     if prioridad:
         pastillas.append(etiqueta(prioridad, COLORES_PRIORIDAD))
-    return f"**{id_ot}** · {area} &nbsp; " + " ".join(pastillas)
+    # el área la escribe a mano quien carga la solicitud: va escapada
+    return f"**{escapar(id_ot)}** · {escapar(area)} &nbsp; " + " ".join(pastillas)
 
 
 def indicador(etiqueta_kpi: str, valor, detalle: str = "", tono=None) -> str:
@@ -368,10 +382,10 @@ def indicador(etiqueta_kpi: str, valor, detalle: str = "", tono=None) -> str:
     """
     apagado = "" if valor not in (0, "0") else " kpi-cero"
     franja = f"border-left-color: {tono[0]};" if tono and not apagado else ""
-    linea = f'<div class="kpi-detalle">{detalle}</div>' if detalle else ""
+    linea = f'<div class="kpi-detalle">{escapar(detalle)}</div>' if detalle else ""
     return (f'<div class="kpi{apagado}" style="{franja}">'
-            f'<div class="kpi-etiqueta">{etiqueta_kpi}</div>'
-            f'<div class="kpi-valor">{valor}</div>{linea}</div>')
+            f'<div class="kpi-etiqueta">{escapar(etiqueta_kpi)}</div>'
+            f'<div class="kpi-valor">{escapar(valor)}</div>{linea}</div>')
 
 
 def fila_indicadores(tarjetas):
