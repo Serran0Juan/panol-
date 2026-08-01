@@ -4,8 +4,10 @@ import pandas as pd
 import streamlit as st
 
 from auth import DESCRIPCION_ROLES, PERMISOS, ROLES, current_user, exigir
-from sheets_backend import (add_usuario, get_estanterias, get_items, get_parametros,
-                            get_usuarios, set_password_hash, set_usuario_activo)
+from sheets_backend import (add_usuario, get_estanterias, get_items, get_ordenes,
+                            get_parametros, get_usuarios, set_password_hash,
+                            set_usuario_activo)
+from solicitud_publica import codigo_configurado, enlace_publico, qr_svg
 
 usuario = current_user()
 if usuario is None:
@@ -46,8 +48,8 @@ with c3:
 
 st.divider()
 
-tab_usuarios, tab_permisos, tab_catalogo, tab_ubic = st.tabs(
-    ["Usuarios", "Permisos", "Catálogo", "Ubicaciones"])
+tab_usuarios, tab_permisos, tab_catalogo, tab_ubic, tab_formulario = st.tabs(
+    ["Usuarios", "Permisos", "Catálogo", "Ubicaciones", "Formulario del hospital"])
 
 # ───────────────────────────────────────────── usuarios
 with tab_usuarios:
@@ -186,3 +188,62 @@ with tab_ubic:
         if not vacias.empty:
             st.warning(f"{len(vacias)} estantería(s) todavía sin materiales asignados: "
                        + ", ".join(vacias["estanteria"].tolist()))
+
+# ───────────────────────────────────────────── formulario del hospital
+with tab_formulario:
+    st.markdown("### Pedidos desde los sectores")
+    st.caption("El cartel que se pega en cada sector para que médicos y enfermeros "
+               "carguen sus pedidos de reparación sin pasar por administración. "
+               "Lo que cargan entra directo como orden de trabajo.")
+
+    if codigo_configurado():
+        st.success("El formulario está **activo**: quien tenga el link y el código "
+                   "del hospital puede cargar un pedido.")
+    else:
+        st.error("El formulario está **apagado**: falta cargar el código del hospital "
+                 "en los secretos. Hasta que se configure, quien entre al link ve un "
+                 "cartel de \"no habilitado\" y no puede cargar nada. Ver SETUP.md.")
+
+    st.divider()
+    st.markdown("##### 1. La dirección de la app")
+    base = st.text_input(
+        "Dirección", value=st.session_state.get("url_publica", ""),
+        placeholder="https://tu-app.streamlit.app",
+        help="Copiala de la barra del navegador, sin nada después del dominio.")
+    st.session_state["url_publica"] = base
+
+    if not base.strip():
+        st.info("Pegá la dirección de arriba y aparecen el link y el código QR.")
+    else:
+        st.markdown("##### 2. El sector")
+        st.caption("Si elegís uno, el QR de ese cartel ya viene con el lugar "
+                   "completado y la persona no lo tiene que escribir.")
+        ordenes_cargadas = get_ordenes()
+        areas = (sorted(a for a in ordenes_cargadas["AREA"].unique() if a)
+                 if not ordenes_cargadas.empty else [])
+        area = st.selectbox("Lugar", ["(sin completar)"] + areas,
+                            accept_new_options=True,
+                            help="Podés escribir uno nuevo si todavía no se usó.")
+        con_area = None if area in ("(sin completar)", None) else area
+
+        enlace = enlace_publico(base, con_area)
+        st.markdown("##### 3. El cartel")
+        st.code(enlace, language=None)
+
+        svg = qr_svg(enlace)
+        if svg is None:
+            st.warning("Para generar el código QR falta la librería `qrcode`. "
+                       "Mientras tanto, copiá el link de arriba en cualquier "
+                       "generador de QR gratuito.")
+        else:
+            izq, der = st.columns([1, 2])
+            with izq:
+                st.image(svg, width=190)
+            with der:
+                st.download_button(
+                    "Descargar el QR para imprimir", svg,
+                    file_name=f"qr-{(con_area or 'general').replace(' ', '-').lower()}.svg",
+                    mime="image/svg+xml")
+                st.caption("Es un SVG: se agranda todo lo que quieras sin que se "
+                           "pixele. Al lado del QR acordate de escribir el código "
+                           "del hospital, que es lo que pide el formulario.")

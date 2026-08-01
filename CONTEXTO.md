@@ -112,6 +112,36 @@ Un usuario sin hash elige su contraseña la primera vez que entra.
 
 ---
 
+### La única pantalla sin login
+
+`app.py` deriva a `solicitud_publica.py` cuando la dirección lleva `?solicitar=1`.
+Es el pedido de reparación que cargan médicos y enfermeros desde el QR pegado en
+su sector, sin tener usuario. Lo que entra ahí nace como una orden más, con el
+mismo `crear_solicitud()` que usa el resto del sistema: no hay una segunda
+bandeja de entrada que después haya que reconciliar.
+
+Como queda abierta en internet, pide un **código del hospital** que sale de los
+secretos (`[solicitudes] codigo`). No es una contraseña personal: es la palabra
+que va escrita en el cartel, al lado del QR. **Si ese secreto no está cargado,
+el formulario no funciona** — es preferible que no ande a que quede abierto sin
+que nadie se entere.
+
+El QR de cada sector se genera desde *Administración → Formulario del hospital*,
+y puede venir con el lugar ya completado (`&area=Quirófano+2`), así la persona
+no lo tiene que escribir.
+
+La pantalla tiene dos pestañas. En **Cargar un pedido** el email es obligatorio:
+es lo que da trazabilidad y lo que después permite la segunda pestaña. En
+**Seguir un pedido** se consulta el estado con el número de orden y ese mismo
+email. Se piden los dos a propósito: con solo el número, cualquiera podría ir
+probando OT-0001, OT-0002... y leer los pedidos de todo el hospital. Cuando no
+hay coincidencia el mensaje es el mismo para "no existe" y para "no es tuyo".
+
+Los estados internos se traducen a algo entendible en `QUE_SIGNIFICA`: quien
+pidió el arreglo no tiene por qué saber qué es una orden PAUSADA.
+
+---
+
 ## 4. Permisos
 
 Definidos en un solo lugar: `PERMISOS` en `auth.py`. Las páginas preguntan con
@@ -138,6 +168,7 @@ auth.py                 permisos y contraseñas
 sheets_backend.py       TODO el acceso a datos; las páginas no tocan gspread
 estilo.py               CSS, paleta y los colores de cada familia de valores
 orden_impresa.py        la orden de trabajo en papel, para firmar
+solicitud_publica.py    el pedido de reparación sin login, para todo el hospital
 pages/                  una pantalla por archivo
 assets/                 plano del pañol y logo
 ```
@@ -192,14 +223,15 @@ podrían escribir en la planilla real.**
 
 ### Pruebas
 
-Cinco suites, 143 verificaciones, repetibles:
+Seis suites, 173 verificaciones, repetibles:
 
 ```bash
 py -3 _prueba_numeros.py         # conversión de números formateados
 py -3 _prueba_movimientos.py     # vales, devoluciones, ingresos
 py -3 _prueba_ordenes.py         # circuito de las órdenes
 py -3 _prueba_planificacion.py   # vencimientos, agenda, carga
-py -3 _prueba_permisos.py        # permisos rol por rol
+py -3 _prueba_permisos.py        # permisos rol por rol y escapado del HTML
+py -3 _prueba_solicitud_publica.py  # el formulario abierto al hospital
 ```
 
 ### Scripts de mantenimiento (se corren a mano, una sola vez)

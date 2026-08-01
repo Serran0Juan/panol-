@@ -15,6 +15,18 @@ st.set_page_config(page_title="Sistema de Gestión Integral de Mantenimiento",
                    page_icon=str(MARCA) if MARCA.exists() else "⚙️", layout="wide")
 estilo.aplicar()
 
+# La única pantalla sin login: el pedido de reparación que carga la gente del
+# hospital desde el QR de su sector. Va antes que todo lo demás, porque no tiene
+# que pasar por el login ni dibujar la navegación.
+if "solicitar" in st.query_params:
+    from solicitud_publica import formulario_publico
+
+    # tiene que pasar por st.navigation igual que el login: si no, Streamlit
+    # arma solo la navegación con todo el contenido de pages/ y le muestra el
+    # menú completo del sistema a alguien que no inició sesión
+    st.navigation([st.Page(formulario_publico, title="Pedido de reparación")]).run()
+    st.stop()
+
 usuario = current_user()
 
 if usuario is None:
