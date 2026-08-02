@@ -140,6 +140,20 @@ hay coincidencia el mensaje es el mismo para "no existe" y para "no es tuyo".
 Los estados internos se traducen a algo entendible en `QUE_SIGNIFICA`: quien
 pidió el arreglo no tiene por qué saber qué es una orden PAUSADA.
 
+### El camino que no se tomó: Google Form
+
+En `apps_script/` está escrito y probado el otro camino posible: un Google Form
+cuyas respuestas un Apps Script convierte en órdenes. **No está en uso.** Queda
+ahí porque tiene una ventaja que el formulario propio no tiene —permite adjuntar
+fotos del problema— y porque sirve si algún día se prefiere esa vía.
+
+Los dos caminos pueden convivir: los dos terminan escribiendo en `Ordenes`.
+
+Su riesgo es que la numeración y los nombres de las columnas quedan escritos en
+dos lados. Por eso existe `_prueba_apps_script.py`, que lee el `.gs` y lo compara
+contra las constantes de `sheets_backend.py`: si alguien renombra una columna en
+la app, la prueba avisa antes de que las órdenes entren mal.
+
 ---
 
 ## 4. Permisos
@@ -169,6 +183,7 @@ sheets_backend.py       TODO el acceso a datos; las páginas no tocan gspread
 estilo.py               CSS, paleta y los colores de cada familia de valores
 orden_impresa.py        la orden de trabajo en papel, para firmar
 solicitud_publica.py    el pedido de reparación sin login, para todo el hospital
+apps_script/            camino alternativo: Google Form -> órdenes (sin usar)
 pages/                  una pantalla por archivo
 assets/                 plano del pañol y logo
 ```
@@ -223,7 +238,7 @@ podrían escribir en la planilla real.**
 
 ### Pruebas
 
-Seis suites, 173 verificaciones, repetibles:
+Siete suites, 194 verificaciones, repetibles:
 
 ```bash
 py -3 _prueba_numeros.py         # conversión de números formateados
@@ -232,6 +247,7 @@ py -3 _prueba_ordenes.py         # circuito de las órdenes
 py -3 _prueba_planificacion.py   # vencimientos, agenda, carga
 py -3 _prueba_permisos.py        # permisos rol por rol y escapado del HTML
 py -3 _prueba_solicitud_publica.py  # el formulario abierto al hospital
+py -3 _prueba_apps_script.py     # que el script de Google Form no se desfase
 ```
 
 ### Scripts de mantenimiento (se corren a mano, una sola vez)
