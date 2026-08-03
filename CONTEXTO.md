@@ -50,7 +50,7 @@ y las armó el usuario; la app se adaptó a ellas. Las demás las crea la app so
 
 | Columna | Nota |
 |---|---|
-| Nro/SKU | número correlativo, es el id |
+| Nro/SKU | número correlativo, es el id. **Tiene huecos**: la app cuenta filas con descripción, no el número más alto |
 | Descripción del Producto | |
 | Stock Inicial | se carga a mano |
 | **Stock Actual** | **fórmula** `=Stock Inicial − Consumo − Préstamos pendientes` |
@@ -256,7 +256,7 @@ podrían escribir en la planilla real.**
 
 ### Pruebas
 
-Ocho suites, 231 verificaciones, repetibles:
+Nueve suites, 254 verificaciones, repetibles:
 
 ```bash
 py -3 _prueba_numeros.py         # conversión de números formateados
@@ -267,6 +267,7 @@ py -3 _prueba_permisos.py        # permisos rol por rol y escapado del HTML
 py -3 _prueba_solicitud_publica.py  # el formulario abierto al hospital
 py -3 _prueba_apps_script.py     # que el script de Google Form no se desfase
 py -3 _prueba_reintentos.py      # aguante ante los cortes de Google
+py -3 _prueba_catalogo.py        # consistencia de la hoja Inventario
 ```
 
 ### Scripts de mantenimiento (se corren a mano, una sola vez)
@@ -315,6 +316,13 @@ Cosas que ya costaron un rato. Vale la pena leerlas antes de tocar.
    filtran por el nombre del usuario. Hay dos parecidos: "Serrano Juan" (admin)
    y "Juan Serrano" (operario).
 7. **Streamlit Cloud cachea.** Con archivos nuevos, hace falta Reboot.
+10. **El número más alto del inventario no es la cantidad de materiales.**
+   La planilla llega al 492 y el panel dice 486: son seis números que quedaron
+   sin usar al borrarse filas. No falta nada. *Administración → Catálogo* tiene
+   un chequeo (`diagnostico_catalogo`) que lo explica y que además detecta lo
+   que sí es un problema: filas con número pero sin descripción, que la app
+   ignora, y números repetidos.
+
 8. **Streamlit marca la página como inglés** (`<html lang="en">`) y no da forma
    de cambiarlo. Chrome entonces la traduce sola y quedan cosas absurdas:
    "Registrar movimiento" aparece como "Movimiento del registrador" —leyó

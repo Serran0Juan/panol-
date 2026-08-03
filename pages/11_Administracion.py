@@ -3,11 +3,13 @@
 import pandas as pd
 import streamlit as st
 
+import estilo
+
 from auth import (DESCRIPCION_ROLES, MINUTOS_BLOQUEO, PERMISOS, ROLES, current_user,
                   emails_frenados, exigir, limpiar_intentos, minutos_de_espera)
-from sheets_backend import (add_usuario, get_estanterias, get_items, get_ordenes,
-                            get_parametros, get_usuarios, set_password_hash,
-                            set_usuario_activo)
+from sheets_backend import (add_usuario, diagnostico_catalogo, get_estanterias,
+                            get_items, get_ordenes, get_parametros, get_usuarios,
+                            set_password_hash, set_usuario_activo)
 from solicitud_publica import enlace_publico, qr_svg
 
 usuario = current_user()
@@ -179,6 +181,61 @@ with tab_catalogo:
         hide_index=True, width="stretch",
     )
 
+    st.subheader("Chequeo de la planilla")
+    st.caption("Compara lo que hay cargado en la hoja Inventario con lo que la app "
+               "muestra, para explicar cualquier diferencia entre los dos números.")
+
+    dx = diagnostico_catalogo()
+    d1, d2, d3 = st.columns(3)
+    with d1:
+        st.markdown(estilo.indicador("Materiales", dx["con_descripcion"],
+                                     "es lo que cuenta la app"),
+                    unsafe_allow_html=True)
+    with d2:
+        st.markdown(estilo.indicador("Número más alto", dx["mayor"],
+                                     "el último de la columna Nro/SKU"),
+                    unsafe_allow_html=True)
+    with d3:
+        huecos = len(dx["faltantes"])
+        st.markdown(estilo.indicador("Números sin usar", huecos,
+                                     "explican la diferencia" if huecos
+                                     else "la numeración es corrida"),
+                    unsafe_allow_html=True)
+
+    st.write("")
+    if dx["mayor"] and dx["con_descripcion"] != dx["mayor"]:
+        st.info(f"La planilla llega al número **{dx['mayor']}** pero hay "
+                f"**{dx['con_descripcion']}** materiales cargados. La diferencia "
+                f"son {len(dx['faltantes'])} número(s) que quedaron sin usar, "
+                "normalmente porque en algún momento se borraron filas. "
+                "**No falta ningún material**: el número es solo un identificador "
+                "y que tenga huecos no afecta a nada.")
+
+    if dx["faltantes"]:
+        with st.expander(f"Ver los {len(dx['faltantes'])} números sin usar"):
+            st.write(", ".join(str(n) for n in dx["faltantes"]))
+
+    # esto sí son problemas de verdad
+    if dx["sin_descripcion"]:
+        st.warning(f"Hay **{dx['sin_descripcion']}** fila(s) con datos pero **sin "
+                   "descripción**. La app las ignora, así que esos materiales no "
+                   "aparecen en ningún lado del sistema. Completales la columna "
+                   "*Descripción del Producto* en la planilla.")
+    if dx["repetidos"]:
+        st.error("Hay números de material **repetidos**: "
+                 + ", ".join(str(n) for n in dx["repetidos"])
+                 + ". Como el número identifica al material, al editar uno la app "
+                 "no puede saber a cuál de las dos filas corresponde. Conviene "
+                 "renumerar las repetidas.")
+    if dx["sin_numero"]:
+        st.warning(f"Hay **{dx['sin_numero']}** material(es) con descripción pero "
+                   "**sin número** en Nro/SKU. No se pueden editar desde la app "
+                   "hasta que se les asigne uno.")
+    if not (dx["sin_descripcion"] or dx["repetidos"] or dx["sin_numero"]):
+        st.success("La planilla está consistente: no hay filas sin descripción, "
+                   "ni números repetidos, ni materiales sin numerar.")
+
+    st.divider()
     st.subheader("Listas desplegables de la planilla")
     st.caption("Salen de la pestaña **Parametros** de tu Google Sheet. "
                "Para cambiarlas, editalas ahí.")

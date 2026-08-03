@@ -471,6 +471,55 @@ def get_items() -> pd.DataFrame:
     return df.reset_index(drop=True)
 
 
+def diagnostico_catalogo() -> dict:
+    """Compara la planilla cruda con lo que la app termina mostrando.
+
+    Existe para explicar de dónde sale una diferencia que confunde seguido: la
+    planilla llega al número 492 y el panel dice 486 materiales. No es un error:
+    la app cuenta las filas que tienen descripción, no el número más alto. Si en
+    algún momento se borraron filas, la numeración queda con huecos.
+
+    Lo que sí es un problema y esto detecta:
+      - filas con número pero sin descripción, que la app ignora (materiales
+        cargados que no se ven en el sistema)
+      - números repetidos, que rompen la edición porque identifican a dos filas
+    """
+    crudo = _leer(HOJA_INVENTARIO, sin_formato=True)
+    vacio = {"filas": 0, "con_descripcion": 0, "sin_descripcion": 0,
+             "mayor": 0, "faltantes": [], "repetidos": [], "sin_numero": 0}
+    if crudo.empty:
+        return vacio
+
+    col_id = COLS_INVENTARIO["id"]
+    col_desc = COLS_INVENTARIO["descripcion"]
+    if col_id not in crudo.columns or col_desc not in crudo.columns:
+        return vacio
+
+    descripcion = crudo[col_desc].astype(str).str.strip()
+    numero = _a_numeros(crudo[col_id])
+
+    # una fila cuenta como cargada si tiene número o descripción; el resto son
+    # renglones en blanco al final de la hoja
+    cargadas = (descripcion != "") | (numero > 0)
+    tiene_desc = cargadas & (descripcion != "")
+
+    numeros = [int(n) for n in numero[tiene_desc] if n > 0]
+    mayor = max(numeros) if numeros else 0
+    vistos, repetidos = set(), set()
+    for n in numeros:
+        (repetidos if n in vistos else vistos).add(n)
+
+    return {
+        "filas": int(cargadas.sum()),
+        "con_descripcion": int(tiene_desc.sum()),
+        "sin_descripcion": int((cargadas & (descripcion == "")).sum()),
+        "sin_numero": int((tiene_desc & (numero <= 0)).sum()),
+        "mayor": mayor,
+        "faltantes": sorted(set(range(1, mayor + 1)) - vistos),
+        "repetidos": sorted(repetidos),
+    }
+
+
 def update_item(item_id: int, **cambios):
     """Actualiza celdas puntuales de un producto, sin pisar las columnas con fórmulas."""
     items = get_items()
