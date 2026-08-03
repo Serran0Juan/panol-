@@ -8,7 +8,7 @@ from auth import (DESCRIPCION_ROLES, MINUTOS_BLOQUEO, PERMISOS, ROLES, current_u
 from sheets_backend import (add_usuario, get_estanterias, get_items, get_ordenes,
                             get_parametros, get_usuarios, set_password_hash,
                             set_usuario_activo)
-from solicitud_publica import codigo_configurado, enlace_publico, qr_svg
+from solicitud_publica import enlace_publico, qr_svg
 
 usuario = current_user()
 if usuario is None:
@@ -217,13 +217,10 @@ with tab_formulario:
                "carguen sus pedidos de reparación sin pasar por administración. "
                "Lo que cargan entra directo como orden de trabajo.")
 
-    if codigo_configurado():
-        st.success("El formulario está **activo**: quien tenga el link y el código "
-                   "del hospital puede cargar un pedido.")
-    else:
-        st.error("El formulario está **apagado**: falta cargar el código del hospital "
-                 "en los secretos. Hasta que se configure, quien entre al link ve un "
-                 "cartel de \"no habilitado\" y no puede cargar nada. Ver SETUP.md.")
+    st.warning("El formulario **no pide ninguna clave**: cualquiera que llegue a "
+               "la dirección puede cargar un pedido. Si aparecen pedidos falsos en "
+               "el tablero, hay que anularlos a mano y conviene volver a pedir un "
+               "código.")
 
     st.divider()
     st.markdown("##### 1. La dirección de la app")

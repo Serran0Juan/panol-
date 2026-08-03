@@ -134,11 +134,15 @@ su sector, sin tener usuario. Lo que entra ahí nace como una orden más, con el
 mismo `crear_solicitud()` que usa el resto del sistema: no hay una segunda
 bandeja de entrada que después haya que reconciliar.
 
-Como queda abierta en internet, pide un **código del hospital** que sale de los
-secretos (`[solicitudes] codigo`). No es una contraseña personal: es la palabra
-que va escrita en el cartel, al lado del QR. **Si ese secreto no está cargado,
-el formulario no funciona** — es preferible que no ande a que quede abierto sin
-que nadie se entere.
+**No pide ninguna clave.** Al principio pedía un código del hospital impreso en
+el cartel; se sacó para que no haya nada que escribir ni recordar. O sea que
+cualquiera que llegue a la dirección puede cargar un pedido. El único freno que
+queda es el tope de pedidos por sesión (`MAXIMO_POR_SESION`), que frena a un
+robot torpe pero no a alguien decidido.
+
+Si aparecen pedidos falsos en el tablero hay que anularlos a mano, y la vuelta
+atrás es volver a pedir el código: está en el historial de git, en el commit que
+lo sacó.
 
 El QR de cada sector se genera desde *Administración → Formulario del hospital*,
 y puede venir con el lugar ya completado (`&area=Quirófano+2`), así la persona

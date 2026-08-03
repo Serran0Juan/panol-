@@ -12,12 +12,13 @@ Tiene dos pestañas: cargar un pedido y seguirlo. Para lo segundo hace falta el
 número de orden y el email con el que se cargó, así cada uno ve lo suyo y nadie
 puede ir probando números para leer los pedidos del resto.
 
-Como la pantalla queda abierta en internet, pide un código que circula dentro
-del hospital. No es una contraseña personal ni pretende serlo: es el filtro que
-evita que un robot o alguien de afuera llene el tablero de pedidos falsos.
+La pantalla queda abierta: alcanza con tener el link para cargar un pedido. Se
+decidió así para que no haya nada que escribir ni recordar. El único freno que
+queda es el límite de pedidos por sesión, que frena a un robot torpe pero no a
+alguien decidido. Si aparecen pedidos basura en el tablero, la vuelta atrás es
+volver a pedir un código (está en el historial de git).
 """
 
-import hmac
 import re
 from pathlib import Path
 from urllib.parse import quote
@@ -30,7 +31,8 @@ from sheets_backend import PRIORIDADES, crear_solicitud, get_ordenes, get_ot_est
 ASSETS = Path(__file__).parent / "assets"
 
 # Cuántos pedidos se aceptan por sesión. Una persona real carga uno, tal vez
-# dos. Es un freno barato: no reemplaza al código, lo acompaña.
+# dos. Es el único freno que queda: frena a un robot torpe, no a alguien
+# decidido, que puede recargar la página y volver a empezar.
 MAXIMO_POR_SESION = 5
 
 AYUDA_PRIORIDAD = {
@@ -114,19 +116,6 @@ def qr_svg(enlace: str) -> str | None:
     codigo.make(fit=True)
     imagen = codigo.make_image(image_factory=qrcode.image.svg.SvgPathImage)
     return imagen.to_string(encoding="unicode")
-
-
-def codigo_configurado() -> str:
-    """El código del hospital, que vive en los secretos y no en el código.
-
-    Si no está configurado, la pantalla no se abre: es preferible que el
-    formulario no funcione a que quede abierto de par en par sin que nadie se
-    entere. Ver SETUP.md.
-    """
-    try:
-        return str(st.secrets["solicitudes"]["codigo"]).strip()
-    except Exception:
-        return ""
 
 
 def _encabezado():
@@ -232,7 +221,7 @@ def _pestana_seguimiento():
     _ficha_pedido(orden)
 
 
-def _pestana_carga(codigo_real: str):
+def _pestana_carga():
     """El formulario para cargar un pedido nuevo."""
     enviada = st.session_state.get("solicitud_enviada")
     if enviada:
@@ -251,11 +240,6 @@ def _pestana_carga(codigo_real: str):
     area_sugerida = str(st.query_params.get("area", "")).strip()
 
     with st.form("pedido_publico", clear_on_submit=False):
-        codigo = st.text_input("Código del hospital *", type="password",
-                               help="Es el que figura en el cartel junto al "
-                                    "código QR de tu sector.")
-        st.divider()
-
         c1, c2 = st.columns(2)
         with c1:
             nombre = st.text_input("Tu nombre y apellido *")
@@ -291,12 +275,6 @@ def _pestana_carga(codigo_real: str):
                    "formulario: pedilo por el canal de siempre.")
         return
 
-    # compare_digest y no ==: así no se puede adivinar el código midiendo
-    # cuánto tarda en responder
-    if not hmac.compare_digest(codigo.strip(), codigo_real):
-        st.error("El código del hospital no es correcto. Fijate en el cartel "
-                 "que está junto al QR.")
-        return
     if not nombre.strip() or not servicio.strip():
         st.error("Necesitamos tu nombre y tu servicio para poder ubicarte.")
         return
@@ -328,15 +306,8 @@ def formulario_publico():
     with centro:
         _encabezado()
 
-        codigo_real = codigo_configurado()
-        if not codigo_real:
-            st.error("El formulario todavía no está habilitado. Un administrador "
-                     "tiene que cargar el código del hospital en los secretos "
-                     "(ver SETUP.md).")
-            return
-
         tab_nuevo, tab_seguir = st.tabs(["Cargar un pedido", "Seguir un pedido"])
         with tab_nuevo:
-            _pestana_carga(codigo_real)
+            _pestana_carga()
         with tab_seguir:
             _pestana_seguimiento()
