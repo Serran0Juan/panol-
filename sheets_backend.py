@@ -16,6 +16,7 @@ planilla (_devdata/) para poder probar sin tocar los datos reales.
 import datetime as dt
 import os
 import re
+import time
 from pathlib import Path
 
 import pandas as pd
@@ -56,6 +57,44 @@ def ahora_texto() -> str:
 
 def hoy() -> dt.date:
     return ahora().date()
+
+
+# ── Aguantar los tropiezos de la API de Google ──────────────────────────────
+# Google limita las consultas por minuto. Registrar varias devoluciones seguidas
+# dispara muchas lecturas juntas —cada escritura vacía la caché y la pantalla
+# siguiente vuelve a leer todas las hojas— y se llega a ese tope. El pedido
+# vuelve con un 429 que se arregla solo esperando unos segundos.
+REINTENTOS = 4
+ESPERA_BASE = 1.5  # segundos; después 3, 6...
+
+CODIGOS_PASAJEROS = (429, 500, 502, 503, 504)
+
+
+class LimiteDeGoogle(RuntimeError):
+    """Se superó el tope de consultas por minuto de Google Sheets."""
+
+
+def _con_reintentos(operacion):
+    """Corre algo contra la planilla, reintentando si el error es pasajero."""
+    from gspread.exceptions import APIError
+
+    for intento in range(REINTENTOS):
+        try:
+            return operacion()
+        except APIError as e:
+            codigo = getattr(e, "code", None)
+            ultimo = intento == REINTENTOS - 1
+            if codigo not in CODIGOS_PASAJEROS:
+                raise
+            if ultimo:
+                if codigo == 429:
+                    raise LimiteDeGoogle(
+                        "Google está recibiendo demasiadas consultas de la app y "
+                        "cortó por un rato. Esperá un minuto y volvé a intentar; "
+                        "no se perdió nada de lo que ya habías registrado."
+                    ) from e
+                raise
+            time.sleep(ESPERA_BASE * (2 ** intento))
 
 
 HOJA_INVENTARIO = "Inventario"
@@ -180,20 +219,41 @@ def _spreadsheet():
     return gspread.authorize(creds).open_by_key(st.secrets["gcp"]["sheet_id"])
 
 
+@st.cache_resource(show_spinner=False)
+def _hoja(nombre: str):
+    """La hoja, guardada para no volver a pedírsela a Google.
+
+    `ss.worksheet(nombre)` no es gratis: por dentro descarga la ficha completa de
+    la planilla. Sin esta caché, cada lectura costaba dos llamadas a la API en
+    vez de una, y con eso se llegaba al tope por minuto haciendo unas pocas
+    devoluciones seguidas.
+
+    No se limpia junto con el resto de la caché (`limpiar_cache`): lo que cambia
+    seguido es el contenido de las hojas, no qué hojas hay.
+    """
+    return _con_reintentos(lambda: _spreadsheet().worksheet(nombre))
+
+
 def _ws(nombre: str, crear_con=None):
     """Devuelve la hoja. Si no existe y se pasan encabezados, la crea (solo hojas propias de la app)."""
-    ss = _spreadsheet()
+    from gspread.exceptions import WorksheetNotFound
+
     try:
-        return ss.worksheet(nombre)
-    except Exception:
+        return _hoja(nombre)
+    except WorksheetNotFound:
+        # Solo se crea la hoja cuando Google confirma que no existe. Antes
+        # entraba acá con cualquier error —incluido un corte pasajero— y podía
+        # terminar creando una hoja duplicada.
         if crear_con is None:
             raise
+        ss = _spreadsheet()
         ws = ss.add_worksheet(title=nombre, rows=1000, cols=max(10, len(crear_con)))
         ws.append_row(crear_con)
         if nombre == HOJA_USUARIOS:
             admin = _admin_inicial()
             if admin[0]:
                 ws.append_row([admin[0], admin[1], admin[2], admin[3], "TRUE", ""])
+        _hoja.clear()  # ahora sí existe: que la próxima búsqueda la encuentre
         return ws
 
 
@@ -258,8 +318,9 @@ def _leer_hoja(nombre: str, crear_con=None, sin_formato=False) -> pd.DataFrame:
     con fechas: ahí los valores crudos vienen como número de serie.
     """
     ws = _ws(nombre, crear_con)
-    valores = (ws.get_all_values(value_render_option="UNFORMATTED_VALUE")
-               if sin_formato else ws.get_all_values())
+    valores = _con_reintentos(
+        lambda: ws.get_all_values(value_render_option="UNFORMATTED_VALUE")
+        if sin_formato else ws.get_all_values())
     if len(valores) < 2:
         return pd.DataFrame(columns=valores[0] if valores else (crear_con or []))
     encabezados = valores[0]
@@ -328,8 +389,10 @@ def _leer(nombre: str, crear_con=None, sin_formato=False) -> pd.DataFrame:
 
 def _agregar_fila(nombre: str, fila: dict, columnas: list):
     if usando_sheets_reales():
-        _ws(nombre, columnas).append_row([str(fila.get(c, "")) for c in columnas],
-                                         value_input_option="USER_ENTERED")
+        hoja = _ws(nombre, columnas)
+        _con_reintentos(
+            lambda: hoja.append_row([str(fila.get(c, "")) for c in columnas],
+                                    value_input_option="USER_ENTERED"))
     else:
         df = _leer_local(nombre, columnas)
         nueva = {c: str(fila.get(c, "")) for c in (df.columns if len(df.columns) else columnas)}
@@ -637,10 +700,10 @@ def _escribir_celdas(hoja: str, columnas: list, nro_fila: int, cambios: dict):
         return
     if usando_sheets_reales():
         ws = _ws(hoja, columnas)
-        ws.batch_update(
+        _con_reintentos(lambda: ws.batch_update(
             [{"range": f"{_col_letra(columnas.index(c))}{nro_fila}", "values": [[v]]}
              for c, v in cambios.items()],
-            value_input_option="USER_ENTERED")
+            value_input_option="USER_ENTERED"))
     else:
         df = _leer_local(hoja, columnas)
         idx = nro_fila - 2

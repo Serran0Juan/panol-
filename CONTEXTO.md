@@ -238,7 +238,7 @@ podrían escribir en la planilla real.**
 
 ### Pruebas
 
-Siete suites, 194 verificaciones, repetibles:
+Ocho suites, 216 verificaciones, repetibles:
 
 ```bash
 py -3 _prueba_numeros.py         # conversión de números formateados
@@ -248,6 +248,7 @@ py -3 _prueba_planificacion.py   # vencimientos, agenda, carga
 py -3 _prueba_permisos.py        # permisos rol por rol y escapado del HTML
 py -3 _prueba_solicitud_publica.py  # el formulario abierto al hospital
 py -3 _prueba_apps_script.py     # que el script de Google Form no se desfase
+py -3 _prueba_reintentos.py      # aguante ante los cortes de Google
 ```
 
 ### Scripts de mantenimiento (se corren a mano, una sola vez)
@@ -296,6 +297,13 @@ Cosas que ya costaron un rato. Vale la pena leerlas antes de tocar.
    filtran por el nombre del usuario. Hay dos parecidos: "Serrano Juan" (admin)
    y "Juan Serrano" (operario).
 7. **Streamlit Cloud cachea.** Con archivos nuevos, hace falta Reboot.
+9. **Google limita las consultas por minuto.** Cada lectura de una hoja costaba
+   dos llamadas: una para ubicar la pestaña y otra para traer los datos.
+   Registrando varias devoluciones seguidas —cada escritura vacía la caché y la
+   pantalla siguiente relee todo— se llegaba al tope y la app se caía con un 429
+   en la cara del usuario. Ahora la pestaña se busca una sola vez (`_hoja`,
+   cacheada) y todo pasa por `_con_reintentos`, que espera y reintenta. Si aun
+   así no cede, avisa en castellano en vez de mostrar el error crudo.
 8. **El servidor de Streamlit Cloud corre en UTC**, no en hora argentina. Con
    `dt.datetime.now()` un vale cargado a las 9 de la mañana quedaba registrado a
    las 12. Toda fecha que se escriba o se compare tiene que salir de `ahora()`,
