@@ -15,6 +15,7 @@ igual en toda la app.
 import html
 
 import streamlit as st
+import streamlit.components.v1 as components
 
 AZUL_NOCHE = "#0E2038"
 AZUL = "#14507E"
@@ -159,6 +160,11 @@ def tabla(df, pintar: dict | None = None, moneda=()):
 CSS = f"""
 <style>
 /* ───────────────────────────── base ───────────────────────────── */
+/* el componente que declara el idioma no dibuja nada: que no deje hueco */
+[data-testid="stIFrame"][height="0"],
+[data-testid="stElementContainer"]:has(> [data-testid="stIFrame"][height="0"]) {{
+    display: none !important;
+}}
 [data-testid="stAppViewContainer"] {{ background: {FONDO}; }}
 [data-testid="stHeader"] {{ background: transparent; }}
 /* Streamlit deja 80px de aire a cada lado; con 40px entran mejor las tablas */
@@ -327,9 +333,38 @@ CSS = f"""
 """
 
 
+def declarar_idioma():
+    """Le avisa al navegador que la página está en castellano.
+
+    Streamlit marca la página como inglés (`<html lang="en">`) y no da forma de
+    cambiarlo. Con eso, Chrome ofrece traducirla y a veces lo hace solo, con
+    resultados absurdos: "Registrar movimiento" le sale "Movimiento del
+    registrador" —leyó "registrar" como sustantivo inglés— y "Agenda" le sale
+    "Orden del día".
+
+    El script va dentro de un componente, que es la única forma de que Streamlit
+    ejecute JavaScript. El componente es un iframe del mismo origen, así que
+    puede tocar la página que lo contiene. Queda de alto cero y escondido.
+    """
+    components.html(
+        """<script>
+        const doc = window.parent.document;
+        doc.documentElement.lang = "es";
+        if (!doc.querySelector('meta[name="google"]')) {
+            const meta = doc.createElement("meta");
+            meta.name = "google";
+            meta.content = "notranslate";
+            doc.head.appendChild(meta);
+        }
+        </script>""",
+        height=0,
+    )
+
+
 def aplicar():
     """Inyecta el estilo. Se llama una vez, desde app.py."""
     st.markdown(CSS, unsafe_allow_html=True)
+    declarar_idioma()
 
 
 TONOS = {

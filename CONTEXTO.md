@@ -311,6 +311,12 @@ Cosas que ya costaron un rato. Vale la pena leerlas antes de tocar.
    filtran por el nombre del usuario. Hay dos parecidos: "Serrano Juan" (admin)
    y "Juan Serrano" (operario).
 7. **Streamlit Cloud cachea.** Con archivos nuevos, hace falta Reboot.
+8. **Streamlit marca la página como inglés** (`<html lang="en">`) y no da forma
+   de cambiarlo. Chrome entonces la traduce sola y quedan cosas absurdas:
+   "Registrar movimiento" aparece como "Movimiento del registrador" —leyó
+   "registrar" como sustantivo inglés— y "Agenda" como "Orden del día". Lo
+   corrige `estilo.declarar_idioma()`, que fija `lang="es"` y agrega
+   `notranslate` desde un componente.
 9. **Google limita las consultas por minuto.** Cada lectura de una hoja costaba
    dos llamadas: una para ubicar la pestaña y otra para traer los datos.
    Registrando varias devoluciones seguidas —cada escritura vacía la caché y la
