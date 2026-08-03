@@ -12,14 +12,16 @@ La primera vez que entra un usuario nuevo (sin hash cargado) la app le pide que
 elija su propia contraseña.
 """
 
+import datetime as dt
 import hashlib
 import hmac
+import math
 import os
 from pathlib import Path
 
 import streamlit as st
 
-from sheets_backend import get_usuarios_activos, set_password_hash
+from sheets_backend import ahora, get_usuarios_activos, set_password_hash
 
 ITERACIONES = 200_000
 
@@ -28,6 +30,70 @@ ASSETS = Path(__file__).parent / "assets"
 # Un solo mensaje para "ese email no existe" y para "la contraseña está mal":
 # si fueran distintos, cualquiera podría ir probando emails hasta dar con uno.
 ERROR_LOGIN = "Email o contraseña incorrectos."
+
+# ── Freno a los intentos a repetición ───────────────────────────────────────
+# La app está abierta en internet, así que cualquiera puede tirarle contraseñas
+# al login. Después de unos cuantos intentos fallidos ese email queda esperando
+# unos minutos.
+INTENTOS_MAXIMOS = 5
+MINUTOS_BLOQUEO = 10
+
+
+@st.cache_resource(show_spinner=False)
+def _intentos() -> dict:
+    """Los intentos fallidos por email, compartidos por todas las sesiones.
+
+    Va en la memoria del servidor y no en la sesión del navegador: si estuviera
+    en la sesión, bastaría con abrir una pestaña nueva para tener otros cinco
+    intentos y el freno no serviría de nada.
+
+    Se pierde cuando la app se reinicia. Es un costo aceptable: lo que esto
+    frena es a alguien probando contraseñas a mano o con un script simple, no a
+    un atacante con tiempo y herramientas.
+    """
+    return {}
+
+
+def _clave(email) -> str:
+    return str(email).strip().lower()
+
+
+def minutos_de_espera(email) -> int:
+    """Minutos que faltan para poder volver a intentar. 0 si no está frenado."""
+    registro = _intentos().get(_clave(email))
+    if not registro:
+        return 0
+
+    fallos, ultimo = registro
+    if fallos < INTENTOS_MAXIMOS:
+        return 0
+
+    faltan = (ultimo + dt.timedelta(minutes=MINUTOS_BLOQUEO) - ahora()).total_seconds()
+    if faltan <= 0:
+        _intentos().pop(_clave(email), None)  # cumplió la espera, arranca de cero
+        return 0
+    return max(1, math.ceil(faltan / 60))
+
+
+def registrar_intento_fallido(email):
+    """Suma uno a la cuenta de ese email.
+
+    Se cuenta también cuando el email no existe: si solo se contaran los
+    existentes, quedar frenado sería una forma de averiguar que un email está
+    dado de alta.
+    """
+    fallos, _ = _intentos().get(_clave(email), (0, None))
+    _intentos()[_clave(email)] = (fallos + 1, ahora())
+
+
+def limpiar_intentos(email):
+    """Borra la cuenta: se llama al entrar bien y cuando un ADMIN destraba."""
+    _intentos().pop(_clave(email), None)
+
+
+def emails_frenados() -> list:
+    """Los emails que están esperando, para que un ADMIN pueda destrabarlos."""
+    return sorted(email for email in list(_intentos()) if minutos_de_espera(email))
 
 # Qué puede hacer cada rol. Todo lo que no esté acá, no se puede.
 #   ver_gestion         : entrar a panel, historial, inventario y ubicaciones (solo mirar)
@@ -167,17 +233,29 @@ def login_widget():
             entrar = st.form_submit_button("Ingresar", type="primary", width="stretch")
 
         if entrar:
+            espera = minutos_de_espera(email)
+            if espera:
+                # se corta antes de mirar la contraseña, así los intentos que
+                # llegan durante la espera no la alargan indefinidamente
+                st.error(f"Demasiados intentos fallidos con ese email. "
+                         f"Probá de nuevo en {espera} minuto(s), o pedile a un "
+                         f"ADMIN que lo destrabe.")
+                return
+
             usuario = por_email.get(str(email).strip().lower())
             if usuario is None:
+                registrar_intento_fallido(email)
                 st.error(ERROR_LOGIN)
             elif not str(usuario.get("PASSWORD_HASH", "")).strip():
                 # nunca eligió contraseña: pasa al segundo paso
                 st.session_state["login_sin_password"] = str(email).strip().lower()
                 st.rerun()
             elif verificar_password(password, str(usuario["PASSWORD_HASH"])):
+                limpiar_intentos(email)
                 st.session_state["usuario"] = usuario
                 st.rerun()
             else:
+                registrar_intento_fallido(email)
                 st.error(ERROR_LOGIN)
 
         st.caption("¿Olvidaste tu contraseña? Pedile a un ADMIN que la reinicie "

@@ -110,6 +110,20 @@ mismo día, alta 3, media 7, baja 15. Se puede pisar orden por orden.
 EMAIL, NOMBRE, ROL, SECTOR, ACTIVO, PASSWORD_HASH (pbkdf2, nunca texto plano).
 Un usuario sin hash elige su contraseña la primera vez que entra.
 
+Después de **5 intentos fallidos**, ese email queda esperando **10 minutos**
+(`INTENTOS_MAXIMOS` y `MINUTOS_BLOQUEO` en `auth.py`). La cuenta de intentos vive
+en la memoria del servidor y no en la sesión del navegador: si estuviera en la
+sesión, abrir una pestaña nueva daría otros cinco intentos. Se cuenta también
+para emails que no existen, porque si no quedar frenado delataría cuáles sí
+existen. Un ADMIN puede destrabar desde *Administración → Usuarios*.
+
+> ⚠️ **Pendiente de seguridad.** Un usuario sin hash elige su contraseña sin que
+> nadie lo valide: alcanza con saber su email. Con la app privada eso no se
+> notaba; ahora que está abierta, cualquiera que adivine el email de alguien que
+> nunca entró puede quedarse con esa cuenta. La medida inmediata es que todos
+> entren y definan su contraseña. La solución de fondo es pedir un código de
+> alta en ese primer ingreso.
+
 ---
 
 ### La única pantalla sin login
@@ -238,7 +252,7 @@ podrían escribir en la planilla real.**
 
 ### Pruebas
 
-Ocho suites, 216 verificaciones, repetibles:
+Ocho suites, 231 verificaciones, repetibles:
 
 ```bash
 py -3 _prueba_numeros.py         # conversión de números formateados

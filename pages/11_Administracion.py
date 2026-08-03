@@ -3,7 +3,8 @@
 import pandas as pd
 import streamlit as st
 
-from auth import DESCRIPCION_ROLES, PERMISOS, ROLES, current_user, exigir
+from auth import (DESCRIPCION_ROLES, MINUTOS_BLOQUEO, PERMISOS, ROLES, current_user,
+                  emails_frenados, exigir, limpiar_intentos, minutos_de_espera)
 from sheets_backend import (add_usuario, get_estanterias, get_items, get_ordenes,
                             get_parametros, get_usuarios, set_password_hash,
                             set_usuario_activo)
@@ -91,6 +92,26 @@ with tab_usuarios:
 
             if elegido == usuario["EMAIL"]:
                 st.caption("No podés desactivar tu propio usuario.")
+
+            # Después de varios intentos fallidos el email queda esperando unos
+            # minutos. Acá se destraba sin tener que aguantar la espera.
+            frenados = emails_frenados()
+            if frenados:
+                st.divider()
+                st.warning(f"{len(frenados)} email(s) frenados por intentos "
+                           f"fallidos de contraseña.")
+                for correo in frenados:
+                    c1, c2 = st.columns([3, 1])
+                    c1.markdown(f"**{correo}** — puede reintentar en "
+                                f"{minutos_de_espera(correo)} minuto(s)")
+                    if c2.button("Destrabar", key=f"destrabar_{correo}",
+                                 width="stretch"):
+                        limpiar_intentos(correo)
+                        st.rerun()
+                st.caption(f"El freno se suelta solo a los {MINUTOS_BLOQUEO} "
+                           "minutos. Si ves muchos emails acá y nadie se olvidó "
+                           "la contraseña, puede ser que alguien esté probando "
+                           "de afuera.")
 
     with sub_nuevo:
         with st.form("nuevo_usuario", clear_on_submit=True):
