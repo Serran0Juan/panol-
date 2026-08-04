@@ -174,6 +174,81 @@ HORAS_JORNADA = 6  # horas útiles por persona y por día, para medir la carga
 TIPOS_ENTREGA = ["CONSUMO", "PRESTADO"]
 DIAS_PARA_DEMORA = 7
 
+# ── Recargables ─────────────────────────────────────────────────────────────
+# Las pilas recargables se entregan y vuelven, como un préstamo, pero son
+# cientos y se mueven todos los días: mezcladas con los vales de herramientas
+# tapan todo. Por eso tienen su propia pantalla y se pueden esconder del resto.
+#
+# La marca vive en la columna Subcategoria del inventario, no en una columna
+# nueva: así se activa escribiendo un texto en la planilla y mañana sirve para
+# cualquier otra cosa recargable (baterías de taladro, por ejemplo).
+SUBCATEGORIA_RECARGABLE = "Pilas recargables"
+DIAS_PARA_DEMORA_RECARGABLE = 15  # una pila no se reclama tan rápido como una amoladora
+
+
+def es_recargable(subcategoria) -> bool:
+    return str(subcategoria).strip().casefold() == SUBCATEGORIA_RECARGABLE.casefold()
+
+
+def items_recargables() -> pd.DataFrame:
+    """Los materiales marcados como recargables en la planilla."""
+    items = get_items()
+    if items.empty:
+        return items
+    return items[items["subcategoria"].apply(es_recargable)]
+
+
+def _ids_recargables() -> set:
+    return {int(i) for i in items_recargables()["id"]}
+
+
+def separar_recargables(movs: pd.DataFrame, incluir: bool) -> pd.DataFrame:
+    """Filtra movimientos según sean de material recargable o no.
+
+    `incluir=True` deja solo los de pilas; `incluir=False` los saca. Se usa para
+    que las pantallas generales no queden tapadas por el movimiento diario de
+    las pilas, y para que la pantalla de pilas muestre solo lo suyo.
+    """
+    if movs.empty or "ID_ITEM" not in movs.columns:
+        return movs
+    ids = _ids_recargables()
+    if not ids:
+        return movs if not incluir else movs.iloc[0:0]
+    de_pilas = movs["ID_ITEM"].apply(
+        lambda n: (not pd.isna(n)) and int(n) in ids)
+    return movs[de_pilas] if incluir else movs[~de_pilas]
+
+
+def prestamos_por_persona(solo_recargables: bool = True) -> pd.DataFrame:
+    """Quién tiene qué sin devolver, agrupado por persona y material.
+
+    La pantalla de pendientes lista vale por vale, que sirve para devolver pero
+    no para saber a quién hay que ir a buscar. Esto responde lo otro: "Ramiro
+    tiene 12 AAA desde hace 4 días".
+    """
+    movs = get_movimientos()
+    columnas = ["persona", "sector", "material", "pendiente", "unidad",
+                "dias", "vales"]
+    if movs.empty:
+        return pd.DataFrame(columns=columnas)
+
+    movs = separar_recargables(movs, incluir=solo_recargables)
+    abiertos = movs[(movs["ESTADO_RENGLON"] == "PENDIENTE") & (movs["pendiente"] > 0)]
+    if abiertos.empty:
+        return pd.DataFrame(columns=columnas)
+
+    abiertos = abiertos.copy()
+    abiertos["dias"] = abiertos["FECHA_VALE"].apply(dias_desde)
+    agrupado = (abiertos
+                .groupby(["Receptor / Para Quien", "SECTOR", "DESCRIPCIÓN_ITEM",
+                          "UNIDAD"], as_index=False)
+                .agg(pendiente=("pendiente", "sum"),
+                     dias=("dias", "max"),
+                     vales=("ID_VALE_REF", lambda v: ", ".join(sorted(set(v))))))
+    agrupado.columns = ["persona", "sector", "material", "unidad",
+                        "pendiente", "dias", "vales"]
+    return agrupado[columnas].sort_values(["dias", "pendiente"], ascending=False)
+
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
 
 def _admin_inicial():

@@ -44,6 +44,7 @@ if puede("ver_gestion"):
         movimientos.append(
             st.Page("pages/3_Movimientos.py", title="Registrar movimiento"))
     movimientos += [
+        st.Page("pages/2_Pilas.py", title="Pilas recargables"),
         st.Page("pages/9_Historial.py", title="Historial"),
         st.Page("pages/4_Reclamos.py", title="Pedidos y reclamos"),
     ]

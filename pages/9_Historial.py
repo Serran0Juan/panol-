@@ -4,7 +4,9 @@ import streamlit as st
 
 import estilo
 from auth import current_user, exigir, puede
-from sheets_backend import devolver_renglon, get_movimientos
+from sheets_backend import (SUBCATEGORIA_RECARGABLE, devolver_renglon,
+                            get_movimientos, items_recargables,
+                            separar_recargables)
 
 usuario = current_user()
 if usuario is None:
@@ -20,6 +22,16 @@ movs = get_movimientos()
 if movs.empty:
     st.info("Todavía no hay movimientos registrados.")
     st.stop()
+
+# Las pilas recargables se mueven todos los días y son cientos: si no se
+# pueden esconder, tapan los préstamos de herramientas. Tienen su propia
+# pantalla, así que acá vienen ocultas de entrada.
+if not items_recargables().empty:
+    ver_pilas = st.checkbox(
+        f"Incluir los movimientos de {SUBCATEGORIA_RECARGABLE.lower()}", value=False,
+        help="Tienen su propia sección. Se esconden acá para que no tapen el resto.")
+    if not ver_pilas:
+        movs = separar_recargables(movs, incluir=False)
 
 f1, f2, f3 = st.columns([1, 1, 2])
 with f1:

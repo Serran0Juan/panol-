@@ -87,6 +87,30 @@ Un vale se cierra solo cuando ningún renglón queda pendiente.
 Un préstamo que no vuelve (se perdió o se rompió) se convierte a `CONSUMO`: el
 stock ya estaba descontado, así que no se toca ningún número.
 
+### Pilas recargables
+
+Son ~800 y se mueven todos los días. Mezcladas con el resto de los vales tapan
+los préstamos de herramientas, así que tienen **pantalla propia**
+(`pages/2_Pilas.py`) — pero **los datos van a las mismas tablas**: el stock se
+calcula con fórmulas que suman sobre `Registro APP`, y en otra tabla dejaría de
+calcularse solo.
+
+Qué material es una pila se define **en la planilla**, escribiendo
+`Pilas recargables` en la columna Subcategoria. No hay columna nueva ni lista en
+el código: ver `SUBCATEGORIA_RECARGABLE`. Sirve igual para cualquier otra cosa
+recargable que aparezca mañana.
+
+- No se identifican de a una: son cientos y sin marcar. Se prestan **por
+  cantidad**, como cualquier otro material.
+- En esa pantalla **no se ofrece CONSUMO**: siempre PRESTADO, para que nadie las
+  descuente para siempre por error.
+- `prestamos_por_persona()` agrupa por persona y tipo — "Ramiro tiene 12 AAA
+  desde hace 4 días" — que es lo que la pantalla de pendientes, que lista vale
+  por vale, no responde.
+- El plazo para reclamarlas es propio (`DIAS_PARA_DEMORA_RECARGABLE`, 15 días):
+  una pila no se reclama tan rápido como una amoladora.
+- En **Historial** vienen ocultas de entrada, con una casilla para incluirlas.
+
 ### Ordenes + OT_Estados — mantenimiento correctivo
 
 - `Ordenes`: ID_OT, alta, solicitante, área, descripción, prioridad, sector y
@@ -256,7 +280,7 @@ podrían escribir en la planilla real.**
 
 ### Pruebas
 
-Nueve suites, 259 verificaciones, repetibles:
+Diez suites, 281 verificaciones, repetibles:
 
 ```bash
 py -3 _prueba_numeros.py         # conversión de números formateados
@@ -268,6 +292,7 @@ py -3 _prueba_solicitud_publica.py  # el formulario abierto al hospital
 py -3 _prueba_apps_script.py     # que el script de Google Form no se desfase
 py -3 _prueba_reintentos.py      # aguante ante los cortes de Google
 py -3 _prueba_catalogo.py        # consistencia de la hoja Inventario
+py -3 _prueba_pilas.py           # pilas recargables
 ```
 
 ### Scripts de mantenimiento (se corren a mano, una sola vez)
