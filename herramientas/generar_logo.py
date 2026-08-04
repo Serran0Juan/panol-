@@ -16,7 +16,7 @@ Se corre a mano; el resultado va a assets/. Volver a correrlo solo si cambia el
 nombre del sistema o los colores.
 
 Uso:
-    py -3 generar_logo.py
+    py -3 herramientas/generar_logo.py
 """
 
 import math
@@ -24,7 +24,7 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont
 
-ASSETS = Path(__file__).parent / "assets"
+ASSETS = Path(__file__).resolve().parent.parent / "assets"
 TITULO = ["Sistema de Gestión", "Integral de Mantenimiento"]
 
 # La barra lateral es azul noche, así que ahí la marca va en claro. Sobre el

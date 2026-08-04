@@ -5,10 +5,12 @@ seguidas se llegaba a ese tope y la app se caía con un error crudo en la cara
 del usuario. Acá se verifica que ahora reintente, que espere cada vez un poco
 más, y que si no hay caso avise en castellano.
 
-    py -3 _prueba_reintentos.py
+    py -3 pruebas/prueba_reintentos.py
 """
 
 import os
+
+import ruta_app  # noqa: F401  agrega la raíz del proyecto al camino de importación
 
 os.environ["PANOL_MODO_LOCAL"] = "1"
 

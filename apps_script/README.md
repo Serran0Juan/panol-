@@ -73,7 +73,7 @@ lo calcula sola al asignar la orden, según la prioridad.
 
 **Las columnas se buscan por nombre, no por posición.** Si mañana se agrega una
 columna a `Ordenes`, el script sigue andando. Si se *renombra* una, no: por eso
-existe `_prueba_apps_script.py`, que compara los nombres que usa el script
+existe `pruebas/prueba_apps_script.py`, que compara los nombres que usa el script
 contra los que usa la app y avisa si se desfasaron.
 
 **Dos personas pueden mandar el formulario en el mismo segundo.** El script usa

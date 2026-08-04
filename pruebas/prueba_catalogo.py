@@ -5,10 +5,12 @@ La duda que originó esto: la planilla llega al número 492 pero el panel dice
 número más alto— pero hasta ahora no había forma de comprobarlo sin hacer
 cuentas a mano.
 
-    py -3 _prueba_catalogo.py
+    py -3 pruebas/prueba_catalogo.py
 """
 
 import os
+
+import ruta_app  # noqa: F401  agrega la raíz del proyecto al camino de importación
 
 os.environ["PANOL_MODO_LOCAL"] = "1"
 

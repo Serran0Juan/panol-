@@ -6,7 +6,7 @@ pone encabezado fijo, negrita, anchos razonables y listas desplegables.
 Es seguro correrlo varias veces: si la pestaña ya existe, no borra nada.
 
 Uso:
-    py -3 crear_hojas_ot.py
+    py -3 herramientas/crear_hojas_ot.py
 """
 
 import pathlib
@@ -18,7 +18,8 @@ from google.oauth2.service_account import Credentials
 from sheets_backend import (COLS_ORDENES, COLS_OT_ESTADOS, ESTADOS_OT, HOJA_ORDENES,
                             HOJA_OT_ESTADOS, PRIORIDADES)
 
-SECRETS = pathlib.Path(__file__).parent / ".streamlit" / "secrets.toml"
+RAIZ = pathlib.Path(__file__).resolve().parent.parent
+SECRETS = RAIZ / ".streamlit" / "secrets.toml"
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
 
 AZUL = {"red": 0.055, "green": 0.125, "blue": 0.22}

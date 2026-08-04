@@ -16,8 +16,8 @@ El respaldo completo de fórmulas está en _backup/respaldo_formulas_*.json.
 Para restaurar, correr este archivo con el argumento "restaurar".
 
 Uso:
-    py -3 migracion_formulas.py            # aplica la migración
-    py -3 migracion_formulas.py restaurar  # vuelve al respaldo más reciente
+    py -3 herramientas/migracion_formulas.py            # aplica la migración
+    py -3 herramientas/migracion_formulas.py restaurar  # vuelve al respaldo más reciente
 """
 
 import json
@@ -28,7 +28,8 @@ import tomllib
 import gspread
 from google.oauth2.service_account import Credentials
 
-SECRETS = pathlib.Path(__file__).parent / ".streamlit" / "secrets.toml"
+RAIZ = pathlib.Path(__file__).resolve().parent.parent
+SECRETS = RAIZ / ".streamlit" / "secrets.toml"
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
 
 
@@ -94,7 +95,7 @@ def migrar():
 
 
 def restaurar():
-    respaldos = sorted(pathlib.Path("_backup").glob("respaldo_formulas_*.json"))
+    respaldos = sorted((RAIZ / "_backup").glob("respaldo_formulas_*.json"))
     if not respaldos:
         raise SystemExit("No hay respaldos en _backup/")
     datos = json.loads(respaldos[-1].read_text(encoding="utf-8"))

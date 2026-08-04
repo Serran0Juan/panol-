@@ -8,10 +8,12 @@ si las pilas fueran a otra tabla su stock dejaría de calcularse solo.
 Lo que se verifica acá es justamente eso: que la separación sea de pantalla y
 no de datos, y que el circuito de préstamo funcione con cantidades.
 
-    py -3 _prueba_pilas.py
+    py -3 pruebas/prueba_pilas.py
 """
 
 import os
+
+import ruta_app  # noqa: F401  agrega la raíz del proyecto al camino de importación
 
 os.environ["PANOL_MODO_LOCAL"] = "1"
 

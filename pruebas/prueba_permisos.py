@@ -2,6 +2,8 @@
 
 import os
 
+import ruta_app  # noqa: F401  agrega la raíz del proyecto al camino de importación
+
 os.environ["PANOL_MODO_LOCAL"] = "1"
 
 import warnings  # noqa: E402

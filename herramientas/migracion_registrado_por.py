@@ -4,7 +4,7 @@ La columna guarda quién cargó cada vale. Se perdió al reemplazar la pestaña,
 así que este script la vuelve a agregar al final, sin tocar las demás.
 
 Uso:
-    py -3 migracion_registrado_por.py
+    py -3 herramientas/migracion_registrado_por.py
 """
 
 import json
@@ -14,7 +14,8 @@ import tomllib
 import gspread
 from google.oauth2.service_account import Credentials
 
-SECRETS = pathlib.Path(__file__).parent / ".streamlit" / "secrets.toml"
+RAIZ = pathlib.Path(__file__).resolve().parent.parent
+SECRETS = RAIZ / ".streamlit" / "secrets.toml"
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
 COLUMNA = "REGISTRADO_POR"
 

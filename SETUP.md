@@ -158,13 +158,13 @@ py -3 -c "open('panol_web/_devdata/MODO_LOCAL','w').close()"
 
 Mientras ese archivo exista, la app trabaja sobre `_devdata/` y muestra un cartel
 amarillo de aviso. Borralo para volver a la planilla real. Las pruebas
-(`_prueba_movimientos.py`) fuerzan ese modo solas y abortan si detectan que
+(`pruebas/prueba_movimientos.py`) fuerzan ese modo solas y abortan si detectan que
 podrían escribir en producción.
 
 Si alguna vez hay que deshacer los cambios de fórmulas en la planilla:
 
 ```bash
-py -3 migracion_formulas.py restaurar
+py -3 herramientas/migracion_formulas.py restaurar
 ```
 
 ## Ideas para más adelante

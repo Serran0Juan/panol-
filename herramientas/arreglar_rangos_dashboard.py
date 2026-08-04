@@ -8,8 +8,8 @@ Se reemplaza ese tope por uno holgado, así el tablero acompaña el
 crecimiento del inventario sin que haya que tocarlo de nuevo.
 
 Uso:
-    py -3 arreglar_rangos_dashboard.py            # muestra qué cambiaría
-    py -3 arreglar_rangos_dashboard.py aplicar    # lo aplica
+    py -3 herramientas/arreglar_rangos_dashboard.py            # muestra qué cambiaría
+    py -3 herramientas/arreglar_rangos_dashboard.py aplicar    # lo aplica
 """
 
 import pathlib
@@ -20,7 +20,8 @@ import tomllib
 import gspread
 from google.oauth2.service_account import Credentials
 
-SECRETS = pathlib.Path(__file__).parent / ".streamlit" / "secrets.toml"
+RAIZ = pathlib.Path(__file__).resolve().parent.parent
+SECRETS = RAIZ / ".streamlit" / "secrets.toml"
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
 
 HOJA = "Dasboard"
@@ -81,7 +82,7 @@ def main():
 
     if not aplicar:
         print("\nEsto fue una vista previa. Para aplicarlo:")
-        print("    py -3 arreglar_rangos_dashboard.py aplicar")
+        print("    py -3 herramientas/arreglar_rangos_dashboard.py aplicar")
         return
 
     ws.batch_update([{"range": celda, "values": [[formula]]} for celda, formula in cambios],

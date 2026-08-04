@@ -8,6 +8,8 @@ import logging
 import os
 import warnings
 
+import ruta_app  # noqa: F401  agrega la raíz del proyecto al camino de importación
+
 os.environ["PANOL_MODO_LOCAL"] = "1"
 warnings.filterwarnings("ignore")
 logging.disable(logging.WARNING)

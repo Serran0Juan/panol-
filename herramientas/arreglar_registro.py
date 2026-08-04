@@ -19,8 +19,8 @@ Importante: los dos arreglos van juntos. Si solo se corrigieran los números, lo
 renglones mal apuntados empezarían a descontar del producto equivocado.
 
 Uso:
-    py -3 arreglar_registro.py            # simula y muestra qué cambiaría
-    py -3 arreglar_registro.py --aplicar  # escribe en la planilla
+    py -3 herramientas/arreglar_registro.py            # simula y muestra qué cambiaría
+    py -3 herramientas/arreglar_registro.py --aplicar  # escribe en la planilla
 """
 
 import datetime as dt
@@ -32,9 +32,9 @@ import tomllib
 import gspread
 from google.oauth2.service_account import Credentials
 
-BASE = pathlib.Path(__file__).parent
-SECRETS = BASE / ".streamlit" / "secrets.toml"
-BACKUP = BASE / "_backup"
+RAIZ = pathlib.Path(__file__).resolve().parent.parent
+SECRETS = RAIZ / ".streamlit" / "secrets.toml"
+BACKUP = RAIZ / "_backup"
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
 
 HOJA_REGISTRO = "Registro APP"

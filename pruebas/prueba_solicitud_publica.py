@@ -5,10 +5,12 @@ que efectivamente no quedó ningún resto del código que pedía antes, que el l
 y el QR del cartel se armen bien, y que el seguimiento de un pedido solo
 funcione con el email de quien lo cargó.
 
-    py -3 _prueba_solicitud_publica.py
+    py -3 pruebas/prueba_solicitud_publica.py
 """
 
 import os
+
+import ruta_app  # noqa: F401  agrega la raíz del proyecto al camino de importación
 
 os.environ["PANOL_MODO_LOCAL"] = "1"
 

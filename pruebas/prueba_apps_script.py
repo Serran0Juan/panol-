@@ -7,18 +7,20 @@ vieja y las órdenes entran mal, sin que nadie se entere.
 
 Esta prueba lee el .gs como texto y lo compara contra las constantes reales.
 
-    py -3 _prueba_apps_script.py
+    py -3 pruebas/prueba_apps_script.py
 """
 
 import os
 import pathlib
 import re
 
+import ruta_app  # noqa: F401  agrega la raíz del proyecto al camino de importación
+
 os.environ["PANOL_MODO_LOCAL"] = "1"
 
 import sheets_backend as sb  # noqa: E402
 
-SCRIPT = pathlib.Path(__file__).parent / "apps_script" / "formulario_a_ordenes.gs"
+SCRIPT = ruta_app.RAIZ / "apps_script" / "formulario_a_ordenes.gs"
 
 ok = fallos = 0
 

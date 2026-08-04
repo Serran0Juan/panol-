@@ -192,7 +192,7 @@ fotos del problema— y porque sirve si algún día se prefiere esa vía.
 Los dos caminos pueden convivir: los dos terminan escribiendo en `Ordenes`.
 
 Su riesgo es que la numeración y los nombres de las columnas quedan escritos en
-dos lados. Por eso existe `_prueba_apps_script.py`, que lee el `.gs` y lo compara
+dos lados. Por eso existe `pruebas/prueba_apps_script.py`, que lee el `.gs` y lo compara
 contra las constantes de `sheets_backend.py`: si alguien renombra una columna en
 la app, la prueba avisa antes de que las órdenes entren mal.
 
@@ -227,8 +227,13 @@ orden_impresa.py        la orden de trabajo en papel, para firmar
 solicitud_publica.py    el pedido de reparación sin login, para todo el hospital
 apps_script/            camino alternativo: Google Form -> órdenes (sin usar)
 pages/                  una pantalla por archivo
+pruebas/                las diez suites; `ruta_app.py` les deja importar la raíz
+herramientas/           scripts de una sola vez, se corren a mano
 assets/                 plano del pañol y logo
 ```
+
+En la raíz vive solo lo que la app necesita para andar. Las pruebas y los
+scripts de mantenimiento están en su carpeta: son de desarrollo, no del sistema.
 
 `sheets_backend.py` es la pieza central. Expone funciones de negocio
 (`registrar_vale`, `devolver_renglon`, `asignar_orden`...) y esconde si los
@@ -283,24 +288,30 @@ podrían escribir en la planilla real.**
 Diez suites, 281 verificaciones, repetibles:
 
 ```bash
-py -3 _prueba_numeros.py         # conversión de números formateados
-py -3 _prueba_movimientos.py     # vales, devoluciones, ingresos
-py -3 _prueba_ordenes.py         # circuito de las órdenes
-py -3 _prueba_planificacion.py   # vencimientos, agenda, carga
-py -3 _prueba_permisos.py        # permisos rol por rol y escapado del HTML
-py -3 _prueba_solicitud_publica.py  # el formulario abierto al hospital
-py -3 _prueba_apps_script.py     # que el script de Google Form no se desfase
-py -3 _prueba_reintentos.py      # aguante ante los cortes de Google
-py -3 _prueba_catalogo.py        # consistencia de la hoja Inventario
-py -3 _prueba_pilas.py           # pilas recargables
+py -3 pruebas/prueba_numeros.py         # conversión de números formateados
+py -3 pruebas/prueba_movimientos.py     # vales, devoluciones, ingresos
+py -3 pruebas/prueba_ordenes.py         # circuito de las órdenes
+py -3 pruebas/prueba_planificacion.py   # vencimientos, agenda, carga
+py -3 pruebas/prueba_permisos.py        # permisos rol por rol y escapado del HTML
+py -3 pruebas/prueba_solicitud_publica.py  # el formulario abierto al hospital
+py -3 pruebas/prueba_apps_script.py     # que el script de Google Form no se desfase
+py -3 pruebas/prueba_reintentos.py      # aguante ante los cortes de Google
+py -3 pruebas/prueba_catalogo.py        # consistencia de la hoja Inventario
+py -3 pruebas/prueba_pilas.py           # pilas recargables
 ```
 
 ### Scripts de mantenimiento (se corren a mano, una sola vez)
 
-- `crear_hojas_ot.py` — crea y formatea `Ordenes` y `OT_Estados`
-- `migracion_formulas.py` — fórmulas de devoluciones parciales, con `restaurar`
-- `arreglar_rangos_dashboard.py` — extiende los rangos cortos del Dasboard
-- `generar_logo.py` — regenera el logo
+- `herramientas/crear_hojas_ot.py` — crea y formatea `Ordenes` y `OT_Estados`
+- `herramientas/migracion_formulas.py` — fórmulas de devoluciones parciales, con `restaurar`
+- `herramientas/migracion_registrado_por.py` — agrega la columna `REGISTRADO_POR`
+- `herramientas/arreglar_rangos_dashboard.py` — extiende los rangos cortos del Dasboard
+- `herramientas/arreglar_registro.py` — cantidades guardadas como texto e `ID_ITEM`
+  que quedaron apuntando a otro material. Simula por defecto; escribe con `--aplicar`
+- `herramientas/generar_logo.py` — regenera el logo
+
+Ya se corrieron todos. Quedan versionados porque explican cómo llegó la planilla
+a la forma que tiene, y porque `migracion_formulas.py` sabe volver atrás.
 
 ---
 
@@ -403,7 +414,7 @@ py -3 -c "open('panol_web/_devdata/MODO_LOCAL','w').close()"
 py -3 -m streamlit run panol_web/app.py
 
 # correr las pruebas
-cd panol_web && py -3 _prueba_movimientos.py
+cd panol_web && py -3 pruebas/prueba_movimientos.py
 
 # publicar
 git add -A && git commit -m "..." && git push    # Streamlit redespliega solo
