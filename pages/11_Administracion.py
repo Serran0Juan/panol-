@@ -9,7 +9,8 @@ from auth import (DESCRIPCION_ROLES, MINUTOS_BLOQUEO, PERMISOS, ROLES, current_u
                   emails_frenados, exigir, limpiar_intentos, minutos_de_espera)
 from sheets_backend import (add_usuario, diagnostico_catalogo, get_estanterias,
                             get_items, get_ordenes, get_parametros, get_usuarios,
-                            set_password_hash, set_usuario_activo)
+                            movimientos_desalineados, set_password_hash,
+                            set_usuario_activo)
 from solicitud_publica import enlace_publico, qr_svg
 
 usuario = current_user()
@@ -234,6 +235,32 @@ with tab_catalogo:
     if not (dx["sin_descripcion"] or dx["repetidos"] or dx["sin_numero"]):
         st.success("La planilla está consistente: no hay filas sin descripción, "
                    "ni números repetidos, ni materiales sin numerar.")
+
+    # Si alguien renumeró el inventario, los movimientos viejos quedan apuntando
+    # a otro material. Se detecta porque cada renglón guardó la descripción que
+    # tenía el material cuando se registró el movimiento.
+    st.markdown("##### Movimientos y numeración")
+    desalineados = movimientos_desalineados()
+    if desalineados.empty:
+        st.success("Cada movimiento registrado sigue apuntando al material "
+                   "correcto. La numeración no rompió el historial.")
+    else:
+        st.error(f"**{len(desalineados)} movimiento(s) quedaron apuntando a otro "
+                 "material.** Pasa cuando se renumera el inventario: el número "
+                 "guardado en el movimiento ahora corresponde a otra cosa. "
+                 "Importa porque las columnas *Consumo* y *Prestamos Pendiente* "
+                 "de la planilla suman por ese número, así que el stock de esos "
+                 "materiales se está calculando mal.")
+        st.dataframe(
+            desalineados.rename(columns={
+                "ID_REGISTRO": "N° registro", "ID_VALE_REF": "Vale",
+                "FECHA_VALE": "Fecha", "ID_ITEM": "N° material",
+                "decia": "El movimiento dice", "dice_hoy": "Hoy ese número es"}),
+            hide_index=True, width="stretch", height=300,
+        )
+        st.caption("Para arreglarlo hay que devolverle a cada material el número "
+                   "que tenía cuando se registraron esos movimientos, o corregir "
+                   "el ID_ITEM de esas filas en la hoja Registro APP.")
 
     st.divider()
     st.subheader("Listas desplegables de la planilla")

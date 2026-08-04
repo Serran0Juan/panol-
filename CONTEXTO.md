@@ -256,7 +256,7 @@ podrían escribir en la planilla real.**
 
 ### Pruebas
 
-Nueve suites, 254 verificaciones, repetibles:
+Nueve suites, 259 verificaciones, repetibles:
 
 ```bash
 py -3 _prueba_numeros.py         # conversión de números formateados

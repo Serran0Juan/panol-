@@ -520,6 +520,48 @@ def diagnostico_catalogo() -> dict:
     }
 
 
+def movimientos_desalineados() -> pd.DataFrame:
+    """Movimientos cuyo número de material ya no coincide con su descripción.
+
+    Cada renglón de "Registro APP" guarda dos cosas del material: su número
+    (ID_ITEM) y la descripción que tenía cuando se registró el movimiento. Si
+    alguien renumera el inventario, el número pasa a apuntar a otro material y
+    las dos cosas dejan de coincidir.
+
+    Importa porque en la planilla las columnas Consumo y Prestamos Pendiente son
+    SUMIFS sobre esta tabla: si el número quedó apuntando a otro material, el
+    stock de los dos se calcula mal y no hay ningún cartel que lo avise.
+
+    Devuelve las filas que no cierran, con lo que decía el movimiento y lo que
+    hay hoy en el inventario con ese número.
+    """
+    reg = get_registro()
+    items = get_items()
+    vacio = pd.DataFrame(columns=["ID_REGISTRO", "ID_VALE_REF", "FECHA_VALE",
+                                  "ID_ITEM", "decia", "dice_hoy"])
+    if reg.empty or items.empty:
+        return vacio
+
+    por_numero = dict(zip(items["id"], items["descripcion"]))
+    filas = []
+    for r in reg.itertuples():
+        numero = r.ID_ITEM
+        decia = str(getattr(r, "DESCRIPCIÓN_ITEM", "")).strip()
+        if pd.isna(numero) or not decia:
+            continue
+        hoy_dice = por_numero.get(int(numero))
+        if hoy_dice is None or hoy_dice.strip().casefold() != decia.casefold():
+            filas.append({
+                "ID_REGISTRO": r.ID_REGISTRO,
+                "ID_VALE_REF": r.ID_VALE_REF,
+                "FECHA_VALE": r.FECHA_VALE,
+                "ID_ITEM": int(numero),
+                "decia": decia,
+                "dice_hoy": hoy_dice if hoy_dice is not None else "(ese número ya no existe)",
+            })
+    return pd.DataFrame(filas, columns=vacio.columns)
+
+
 def update_item(item_id: int, **cambios):
     """Actualiza celdas puntuales de un producto, sin pisar las columnas con fórmulas."""
     items = get_items()

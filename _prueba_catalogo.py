@@ -94,5 +94,34 @@ check("coincide con lo que muestra la app",
       f"-> diagnóstico {real['con_descripcion']}, app {len(items)}")
 check("el mayor no es menor que la cantidad", real["mayor"] >= real["con_descripcion"])
 
+print("\n9. Movimientos que quedan apuntando a otro material")
+# Cada renglón de Registro APP guarda el número del material y la descripción
+# que tenía. Si se renumera el inventario, dejan de coincidir.
+check("con la planilla intacta no hay ninguno", sb.movimientos_desalineados().empty)
+
+reg = sb.get_registro()
+items = sb.get_items()
+objetivo = sorted({int(n) for n in reg["ID_ITEM"].dropna()})[0]
+
+# cambiarle la descripción al material es lo mismo, para el chequeo, que si el
+# número hubiera pasado a apuntar a otra cosa
+revuelto = items.copy()
+revuelto.loc[revuelto["id"] == objetivo, "descripcion"] = "Otra cosa distinta"
+with mock.patch.object(sb, "get_items", return_value=revuelto):
+    rotos = sb.movimientos_desalineados()
+
+esperados = int((reg["ID_ITEM"] == objetivo).sum())
+check("detecta los movimientos afectados", len(rotos) == esperados,
+      f"-> {len(rotos)} de {esperados} esperados")
+check("dice qué decía el movimiento", bool(str(rotos.iloc[0]["decia"]).strip()))
+check("y qué hay hoy con ese número",
+      rotos.iloc[0]["dice_hoy"] == "Otra cosa distinta")
+
+# un número que ya no existe en el inventario también se reporta
+with mock.patch.object(sb, "get_items", return_value=items[items["id"] != objetivo]):
+    huerfanos = sb.movimientos_desalineados()
+check("avisa si el número ya no existe en el inventario",
+      (huerfanos["dice_hoy"] == "(ese número ya no existe)").any())
+
 print(f"\n{'=' * 52}\nRESULTADO: {ok} OK, {fallos} fallas\n{'=' * 52}")
 raise SystemExit(1 if fallos else 0)
