@@ -14,6 +14,7 @@ planilla (_devdata/) para poder probar sin tocar los datos reales.
 """
 
 import datetime as dt
+import numbers
 import os
 import re
 import time
@@ -462,11 +463,35 @@ def _leer(nombre: str, crear_con=None, sin_formato=False) -> pd.DataFrame:
     return _leer_local(nombre, crear_con)
 
 
+def _valor_celda(valor):
+    """Prepara un valor para escribirlo en la planilla.
+
+    Los números tienen que viajar como números, no como texto. La planilla está
+    en español (es_ES), donde el separador decimal es la coma: si mandamos
+    str(1.0) = "1.0", Google no lo reconoce como número y lo guarda como texto.
+    La celda se ve igual, pero los SUMIFS de "Inventario" la suman como 0 y el
+    consumo nunca descuenta del stock.
+    """
+    if valor is None:
+        return ""
+    if isinstance(valor, bool):
+        return str(valor)
+    if isinstance(valor, numbers.Number):
+        try:
+            f = float(valor)
+        except (TypeError, ValueError):
+            return str(valor)
+        if f != f or f in (float("inf"), float("-inf")):  # NaN o infinito
+            return ""
+        return int(f) if f.is_integer() else f
+    return str(valor)
+
+
 def _agregar_fila(nombre: str, fila: dict, columnas: list):
     if usando_sheets_reales():
         hoja = _ws(nombre, columnas)
         _con_reintentos(
-            lambda: hoja.append_row([str(fila.get(c, "")) for c in columnas],
+            lambda: hoja.append_row([_valor_celda(fila.get(c, "")) for c in columnas],
                                     value_input_option="USER_ENTERED"))
     else:
         df = _leer_local(nombre, columnas)
@@ -657,7 +682,8 @@ def update_item(item_id: int, **cambios):
             if encabezado not in encabezados:
                 continue
             letra = _col_letra(encabezados.index(encabezado))
-            actualizaciones.append({"range": f"{letra}{nro_fila}", "values": [[valor]]})
+            actualizaciones.append({"range": f"{letra}{nro_fila}",
+                                    "values": [[_valor_celda(valor)]]})
         if actualizaciones:
             ws.batch_update(actualizaciones, value_input_option="USER_ENTERED")
     else:
@@ -867,7 +893,8 @@ def _escribir_celdas(hoja: str, columnas: list, nro_fila: int, cambios: dict):
     if usando_sheets_reales():
         ws = _ws(hoja, columnas)
         _con_reintentos(lambda: ws.batch_update(
-            [{"range": f"{_col_letra(columnas.index(c))}{nro_fila}", "values": [[v]]}
+            [{"range": f"{_col_letra(columnas.index(c))}{nro_fila}",
+              "values": [[_valor_celda(v)]]}
              for c, v in cambios.items()],
             value_input_option="USER_ENTERED"))
     else:
