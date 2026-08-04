@@ -741,11 +741,15 @@ def get_registro() -> pd.DataFrame:
     """Renglones de los vales, con la cantidad pendiente ya calculada."""
     df = _leer(HOJA_REGISTRO, COLS_REGISTRO)
     if df.empty:
-        return pd.DataFrame(columns=COLS_REGISTRO + ["pendiente", "_fila"])
+        return pd.DataFrame(columns=COLS_REGISTRO + ["pendiente", "_fila", "_fecha"])
     df["_fila"] = range(2, len(df) + 2)  # fila real en la planilla
     df = df[df["ID_REGISTRO"].astype(str).str.strip() != ""].copy()
     for c in ["ID_ITEM", "CANT", "CANT_DEVUELTA"]:
         df[c] = _a_numeros(df[c])
+    # Números y fechas de verdad, no texto: las pantallas ordenan por estas dos
+    # columnas y como texto el 100 cae debajo del 99, y las 9 debajo de las 11.
+    df["ID_REGISTRO"] = pd.to_numeric(df["ID_REGISTRO"], errors="coerce").astype("Int64")
+    df["_fecha"] = _a_fechas(df["FECHA_VALE"])
     # Renglones cargados antes de que existiera la columna: un préstamo sin
     # estado se considera pendiente; cualquier otro tipo, ya cerrado.
     df["ESTADO_RENGLON"] = df["ESTADO_RENGLON"].astype(str).str.strip().str.upper()
@@ -811,6 +815,18 @@ def parse_fecha(texto):
         except ValueError:
             continue
     return None
+
+
+def _a_fechas(serie) -> pd.Series:
+    """Pasa una columna de fechas de texto a fecha de verdad.
+
+    Hace falta para ordenar y para filtrar por período. La planilla devuelve la
+    hora sin el cero adelante ("9:05:00"), así que ordenar el texto deja las 9
+    de la mañana por debajo de las 11 y los movimientos del final del día
+    aparecen en cualquier lado.
+    """
+    return pd.Series([parse_fecha(v) for v in serie], index=serie.index,
+                     dtype="datetime64[ns]")
 
 
 def dias_desde(fecha_texto: str) -> int:

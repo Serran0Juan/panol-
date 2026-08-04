@@ -215,11 +215,11 @@ with tab_historial:
                    "aparece acá.")
         vista = movs.sort_values("ID_REGISTRO", ascending=False).copy()
         vista["estado"] = estado_movimiento(vista)
-        tabla = (vista[["FECHA_VALE", "ID_VALE_REF", "DESCRIPCIÓN_ITEM", "estado",
+        tabla = (vista[["_fecha", "ID_VALE_REF", "DESCRIPCIÓN_ITEM", "estado",
                         "CANT", "CANT_DEVUELTA", "pendiente", "UNIDAD", "SECTOR",
                         "Receptor / Para Quien", "REGISTRADO_POR"]]
                  .rename(columns={
-                     "FECHA_VALE": "Fecha", "ID_VALE_REF": "Vale",
+                     "_fecha": "Fecha", "ID_VALE_REF": "Vale",
                      "DESCRIPCIÓN_ITEM": "Pila", "estado": "Estado",
                      "CANT": "Entregadas", "CANT_DEVUELTA": "Devueltas",
                      "pendiente": "Faltan", "UNIDAD": "Un.", "SECTOR": "Sector",

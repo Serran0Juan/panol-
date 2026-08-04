@@ -101,9 +101,9 @@ if movimientos.empty:
 else:
     recientes = movimientos.sort_values("ID_REGISTRO", ascending=False).head(15).copy()
     recientes["estado"] = estado_movimiento(recientes)
-    tabla = (recientes[["FECHA_VALE", "ID_VALE_REF", "DESCRIPCIÓN_ITEM", "TIPO_MOV", "estado",
+    tabla = (recientes[["_fecha", "ID_VALE_REF", "DESCRIPCIÓN_ITEM", "TIPO_MOV", "estado",
                         "CANT", "UNIDAD", "SECTOR", "Receptor / Para Quien", "REGISTRADO_POR"]]
-             .rename(columns={"FECHA_VALE": "Fecha", "ID_VALE_REF": "Vale",
+             .rename(columns={"_fecha": "Fecha", "ID_VALE_REF": "Vale",
                               "DESCRIPCIÓN_ITEM": "Material", "TIPO_MOV": "Tipo",
                               "estado": "Estado", "CANT": "Cant.", "UNIDAD": "Un.",
                               "SECTOR": "Sector", "Receptor / Para Quien": "Para quién",

@@ -74,10 +74,10 @@ if q.strip():
 
 st.caption(f"{len(vista)} de {len(mios)} movimientos")
 tabla = (vista.sort_values("ID_REGISTRO", ascending=False)[
-    ["FECHA_VALE", "ID_VALE_REF", "DESCRIPCIÓN_ITEM", "TIPO_MOV", "CANT",
+    ["_fecha", "ID_VALE_REF", "DESCRIPCIÓN_ITEM", "TIPO_MOV", "CANT",
      "CANT_DEVUELTA", "pendiente", "UNIDAD", "ESTADO_RENGLON"]
 ].rename(columns={
-    "FECHA_VALE": "Fecha", "ID_VALE_REF": "Vale", "DESCRIPCIÓN_ITEM": "Material",
+    "_fecha": "Fecha", "ID_VALE_REF": "Vale", "DESCRIPCIÓN_ITEM": "Material",
     "TIPO_MOV": "Tipo", "CANT": "Retirado", "CANT_DEVUELTA": "Devuelto",
     "pendiente": "Pendiente", "UNIDAD": "Unidad", "ESTADO_RENGLON": "Estado",
 }))

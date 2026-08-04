@@ -1,11 +1,13 @@
 """Historial de movimientos: registro completo de lo que modificó el stock."""
 
+import datetime as dt
+
 import streamlit as st
 
 import estilo
 from auth import current_user, exigir, puede
 from sheets_backend import (SUBCATEGORIA_RECARGABLE, devolver_renglon,
-                            get_movimientos, items_recargables,
+                            get_movimientos, hoy, items_recargables,
                             separar_recargables)
 
 usuario = current_user()
@@ -33,15 +35,34 @@ if not items_recargables().empty:
     if not ver_pilas:
         movs = separar_recargables(movs, incluir=False)
 
-f1, f2, f3 = st.columns([1, 1, 2])
+# Cuántos días para atrás mira cada opción. None = sin límite.
+PERIODOS = {"Todo": None, "Hoy": 0, "Últimos 7 días": 6, "Últimos 30 días": 29,
+            "Elegir fechas": "libre"}
+
+f1, f2, f3, f4 = st.columns([1, 1, 1, 2])
 with f1:
-    tipo = st.selectbox("Tipo", ["Todos"] + sorted(movs["TIPO_MOV"].unique()))
+    periodo = st.selectbox("Período", list(PERIODOS))
 with f2:
-    estado = st.selectbox("Estado", ["Todos", "PENDIENTE", "CERRADO"])
+    tipo = st.selectbox("Tipo", ["Todos"] + sorted(movs["TIPO_MOV"].unique()))
 with f3:
+    estado = st.selectbox("Estado", ["Todos", "PENDIENTE", "CERRADO"])
+with f4:
     q = st.text_input("Buscar material, vale o persona", "")
 
+desde = hasta = None
+if periodo == "Elegir fechas":
+    rango = st.date_input("Desde / hasta", value=(hoy() - dt.timedelta(days=6), hoy()),
+                          max_value=hoy(), format="DD/MM/YYYY")
+    # mientras se elige la segunda fecha, el control devuelve una sola
+    if len(rango) == 2:
+        desde, hasta = rango
+elif PERIODOS[periodo] is not None:
+    desde, hasta = hoy() - dt.timedelta(days=PERIODOS[periodo]), hoy()
+
 vista = movs
+if desde is not None:
+    dia = vista["_fecha"].dt.date
+    vista = vista[dia.notna() & (dia >= desde) & (dia <= hasta)]
 if tipo != "Todos":
     vista = vista[vista["TIPO_MOV"] == tipo]
 if estado != "Todos":
@@ -57,11 +78,11 @@ if q.strip():
 st.caption(f"{len(vista)} de {len(movs)} registros")
 
 tabla = vista.sort_values("ID_REGISTRO", ascending=False)[
-    ["ID_VALE_REF", "FECHA_VALE", "DESCRIPCIÓN_ITEM", "TIPO_MOV", "CANT", "CANT_DEVUELTA",
+    ["ID_VALE_REF", "_fecha", "DESCRIPCIÓN_ITEM", "TIPO_MOV", "CANT", "CANT_DEVUELTA",
      "pendiente", "UNIDAD", "SECTOR", "Receptor / Para Quien", "REGISTRADO_POR",
      "ESTADO_RENGLON", "OBSERVACIONES"]
 ].rename(columns={
-    "ID_VALE_REF": "Vale", "FECHA_VALE": "Fecha y hora", "DESCRIPCIÓN_ITEM": "Material",
+    "ID_VALE_REF": "Vale", "_fecha": "Fecha y hora", "DESCRIPCIÓN_ITEM": "Material",
     "TIPO_MOV": "Tipo", "CANT": "Entregado", "CANT_DEVUELTA": "Devuelto",
     "pendiente": "Pendiente", "UNIDAD": "Unidad", "SECTOR": "Sector",
     "Receptor / Para Quien": "Para quién", "REGISTRADO_POR": "Registrado por",
