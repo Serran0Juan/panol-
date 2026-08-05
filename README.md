@@ -44,9 +44,3 @@ hospital inicia el circuito escaneando un QR, sin necesidad de usuario.
 
 ---
 
-
-- **[CONTEXTO.md](CONTEXTO.md)** — cómo funciona por dentro: modelo de datos,
-  permisos, decisiones tomadas y trampas conocidas. Es el documento para
-  ponerse al día sin haber participado de la construcción.
-- **[SETUP.md](SETUP.md)** — paso a paso para dejar la app operativa: cuenta de
-  servicio de Google, publicación y alta de usuarios.
